@@ -1,0 +1,26 @@
+{
+  "name": "juststudy",
+  "productName": "JustStudy",
+  "version": "1.0.0",
+  "description": "JustStudy desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.juststudy.desktop",
+    "productName": "JustStudy",
+    "files": ["main.js", "app/**/*"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg", "category": "public.app-category.education" },
+    "linux": { "target": ["AppImage", "deb"], "category": "Education" }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
