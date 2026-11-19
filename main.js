@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, shell, Menu, ipcMain } = require('electron');
+const { app, BrowserWindow, WebContentsView, shell, Menu, ipcMain, session } = require('electron');
 const path = require('path');
 const gt = require('./google-tasks');
 
@@ -234,11 +234,37 @@ const AQI_MEASURE = `(() => {
   }
   return n ? { top, bot, n } : null;
 })()`;
+// Dark-grey fills inside the AQI card (the semicircle's centre) become the same #0B0B0B as the outside; the number stays.
+const AQI_RECOLOR = `(() => {
+  const BG = '#0B0B0B';
+  const grey = (c) => {
+    const m = /rgba?\\((\\d+),\\s*(\\d+),\\s*(\\d+)(?:,\\s*([\\d.]+))?\\)/.exec(c || '');
+    if (!m) return false;
+    const r = +m[1], g = +m[2], b = +m[3], a = m[4] === undefined ? 1 : +m[4];
+    return a > 0.05 && Math.max(r, g, b) - Math.min(r, g, b) <= 18 && Math.max(r, g, b) <= 110 && !(r === 11 && g === 11 && b === 11);
+  };
+  const run = () => {
+    for (const el of document.querySelectorAll('body, body *')) {
+      const cs = getComputedStyle(el);
+      if (grey(cs.backgroundColor)) el.style.setProperty('background-color', BG, 'important');
+      if (/^(path|circle|ellipse|rect)$/i.test(el.tagName) && grey(cs.fill)) {
+        const r = el.getBoundingClientRect();
+        if (r.width > 40) el.style.setProperty('fill', BG, 'important');
+      }
+    }
+  };
+  run();
+  if (!window.__jsAqiMo) {
+    window.__jsAqiMo = new MutationObserver(() => { clearTimeout(window.__jsAqiT); window.__jsAqiT = setTimeout(run, 60); });
+    window.__jsAqiMo.observe(document.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['style', 'class', 'fill'] });
+  }
+})()`;
 ipcMain.handle('aqi:fit', async () => {
   if (!win || win.isDestroyed()) return null;
   try {
     const frames = win.webContents.mainFrame.framesInSubtree.filter((f) => f !== win.webContents.mainFrame && /aqi\.in/i.test(f.url));
     for (const f of frames) {
+      try { await f.executeJavaScript(AQI_RECOLOR); } catch (e) {}
       const r = await f.executeJavaScript(AQI_MEASURE);
       if (!r) continue;
       const gapTop = r.top - AQI_BASE_TOP, gapBot = AQI_BASE_TOP + AQI_BASE_H - r.bot;
@@ -267,30 +293,10 @@ function sizeCurtain() {
   const [w, h] = win.getContentSize();
   curtain.setBounds({ x: 0, y: 0, width: w, height: h });
 }
-async function transition(swap) {
+// No fade any more: the swap happens instantly (the curtain code above is kept but unused).
+function transition(swap) {
   if (!win || win.isDestroyed()) return;
-  if (moving) { queued = swap; return; }   // the latest request wins
-  moving = true;
-  let swapped = false;
-  const run = () => { if (!swapped) { swapped = true; swap(); } };
-  try {
-    await ensureCurtain();
-    sizeCurtain();
-    win.contentView.addChildView(curtain);
-    await curtain.webContents.executeJavaScript("document.body.style.opacity='1'");
-    await sleep(FADE_MS);
-    run();
-    win.contentView.addChildView(curtain); // keep it above the view that just appeared
-    await curtain.webContents.executeJavaScript("document.body.style.opacity='0'");
-    await sleep(FADE_MS);
-    if (win && !win.isDestroyed()) win.contentView.removeChildView(curtain);
-  } catch (e) {
-    run();
-    try { win.contentView.removeChildView(curtain); } catch (e2) {}
-  } finally {
-    moving = false;
-    if (queued) { const q = queued; queued = null; transition(q); }
-  }
+  swap();
 }
 
 function createSite(url) {
@@ -416,6 +422,7 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 600,
+    fullscreen: true, // opens full-screen (F11 toggles it)
     title: 'JustStudy',
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
@@ -460,15 +467,32 @@ function createWindow() {
   });
 }
 
+/* ---------- Chrome extensions (unpacked folders in ./extensions, e.g. extensions/ublock) for the websites ---------- */
+function loadExtensions() {
+  const fs = require('fs');
+  const dir = app.isPackaged ? path.join(process.resourcesPath, 'extensions') : path.join(__dirname, 'extensions');
+  let names = [];
+  try { names = fs.readdirSync(dir); } catch (e) { return; }
+  const ses = session.fromPartition(SITE_PARTITION);
+  for (const n of names) {
+    const full = path.join(dir, n);
+    if (!fs.existsSync(path.join(full, 'manifest.json'))) continue;
+    ses.loadExtension(full, { allowFileAccess: true })
+      .then((x) => console.log('Extension loaded:', x.name))
+      .catch((e) => console.warn('Extension failed:', n, e && e.message));
+  }
+}
+
 app.whenReady().then(() => {
   // Private DNS (DNS-over-HTTPS) through AdGuard: blocks ad and tracker domains.
   // 'secure' = never fall back to the normal DNS. Change to 'automatic' if a network blocks DoH.
   app.configureHostResolver({
     enableBuiltInResolver: true,
-    secureDnsMode: 'secure',
+    secureDnsMode: 'automatic',
     secureDnsServers: ['https://dns.adguard.com/dns-query']
   });
 
+  loadExtensions();
   Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => {

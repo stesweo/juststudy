@@ -26,11 +26,6 @@
     "win": {
       "target": "nsis"
     },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "artifactName": "JustStudy-Setup.exe"
-    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.education"
@@ -41,7 +36,18 @@
         "deb"
       ],
       "category": "Education"
-    }
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "JustStudy-Setup.exe"
+    },
+    "extraResources": [
+      {
+        "from": "extensions",
+        "to": "extensions"
+      }
+    ]
   },
   "devDependencies": {
     "electron": "^33.0.0",
