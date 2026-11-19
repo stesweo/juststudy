@@ -164,3 +164,27 @@
 .gt-auth .gt-alt:hover{color:var(--fg)}
 .gt-note{font-size:.8rem;min-height:1em;margin:6px 0 0}
 .gt-note.err{color:#ff8a8a}
+
+/* subtle transitions */
+.gt-title,.gt-icon,.gt-addtask,.gt-row,.gt-pill,.gt-qchip,.gt-chip,.gt-chipbtn,.gt-chipx,
+.gt-mi,.gt-slot,.gt-day,.gt-donebtn,.gt-chk,.gt-auth .gt-alt{
+  transition:background-color .15s ease,color .15s ease,border-color .15s ease,box-shadow .15s ease,filter .15s ease,opacity .15s ease}
+.gt-row .gt-more,.gt-row .gt-star{transition:opacity .15s ease,background-color .15s ease,color .15s ease}
+.gt-chk{transition:background-color .18s ease,border-color .18s ease,transform .12s ease}
+.gt-chk:active{transform:scale(.88)}
+.gt-donebtn .gt-ic{transition:transform .2s ease}
+.gt-row.dragging{transition:opacity .15s ease}
+
+@keyframes gt-pop{from{opacity:0;transform:translateY(-4px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes gt-fade{from{opacity:0}to{opacity:1}}
+@keyframes gt-rise{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.gt-menu{animation:gt-pop .14s ease-out}
+.gt-slots:not([hidden]){animation:gt-pop .12s ease-out}
+.gt-modal{animation:gt-fade .16s ease-out}
+.gt-card{animation:gt-rise .18s ease-out}
+.gt-edit{animation:gt-fade .15s ease-out}
+.gt-status:not(:empty){animation:gt-fade .2s ease-out}
+
+@media (prefers-reduced-motion:reduce){
+  .gt-panel *{transition:none!important;animation:none!important}
+}
