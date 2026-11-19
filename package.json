@@ -23,8 +23,13 @@
       "google-config.json",
       "app/**/*"
     ],
-   "win": { "target": "nsis" },
-   "nsis": { "oneClick": true, "perMachine": false, "artifactName": "JustStudy-Setup.exe" }
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "artifactName": "JustStudy-Setup.exe"
     },
     "mac": {
       "target": "dmg",
