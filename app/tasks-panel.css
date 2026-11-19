@@ -1,7 +1,12 @@
 /* Google Tasks side panel – uses the app's own theme variables */
 :root{--gt-w:420px}
+/* Monochrome accent for the tasks panel (independent of the app's purple theme).
+   --violet is re-scoped here so every var(--violet) inside the panel turns light grey/white;
+   --gt-on-accent is the dark text colour used on top of that light accent. */
+
 .gt-panel{
   position:fixed;top:0;right:0;bottom:0;z-index:200; /* above the clock (101) and the customise button (110) */
+  --violet:#e8e8e8;--line:#2a2a2a;--muted:#9a9a9a;--fg:#f0f0f0;--gt-on-accent:#0a0a0a;
   width:min(var(--gt-w),100vw);display:flex;flex-direction:column;
   background:var(--surface);color:var(--fg);font-family:var(--body);font-size:16px;
   border-left:1px solid var(--line);overscroll-behavior:contain;
@@ -35,7 +40,7 @@
 .gt-addslot{margin:2px 8px 4px}
 .gt-addtask{display:flex;align-items:center;gap:12px;font-size:1.02rem;width:100%;padding:9px 8px;border:0;border-radius:10px;background:none;
   color:var(--violet);font-weight:600;cursor:pointer;text-align:left}
-.gt-addtask:hover{background:rgba(139,92,246,.12)}
+.gt-addtask:hover{background:rgba(255,255,255,.10)}
 .gt-status{min-height:1.2em;margin:0 16px 4px;font-size:.8rem;color:var(--muted)}
 .gt-status.err{color:#ff8a8a}
 
@@ -75,7 +80,7 @@
 
 /* round tick box */
 .gt-chk{flex:none;display:inline-grid;place-items:center;width:22px;height:22px;margin-top:1px;padding:0;border-radius:50%;
-  border:2px solid var(--muted);background:transparent;color:#fff;cursor:pointer}
+  border:2px solid var(--muted);background:transparent;color:var(--gt-on-accent);cursor:pointer}
 .gt-chk:hover{border-color:var(--violet)}
 .gt-chk.on{background:var(--violet);border-color:var(--violet)}
 .gt-chk.ghost{cursor:default;pointer-events:none}
@@ -107,8 +112,9 @@
 
 /* buttons */
 .gt-pill{height:32px;padding:0 16px;border-radius:999px;border:0;background:transparent;color:var(--violet);font-weight:600;cursor:pointer}
-.gt-pill:hover{background:rgba(139,92,246,.14)}
-.gt-pill.primary{background:var(--violet);color:#fff}
+.gt-pill:hover{background:rgba(255,255,255,.12)}
+.gt-pill.primary{background:var(--violet);color:var(--gt-on-accent)}
+.gt-pill.primary.danger{color:#fff}
 .gt-pill.primary:hover{filter:brightness(1.12)}
 .gt-pill.primary.danger{background:#c0392b}
 .gt-pill.ghost{margin-right:auto;color:var(--muted)}
@@ -141,7 +147,7 @@
 .gt-day.out{color:var(--muted);opacity:.55}
 .gt-day:hover{background:rgba(255,255,255,.09)}
 .gt-day.today{border-color:var(--violet);color:var(--violet)}
-.gt-day.sel{background:var(--violet);border-color:var(--violet);color:#fff;opacity:1}
+.gt-day.sel{background:var(--violet);border-color:var(--violet);color:var(--gt-on-accent);opacity:1}
 .gt-prow{display:flex;align-items:center;gap:12px;margin-top:10px;color:var(--muted)}
 .gt-prow .gt-select{flex:1}
 .gt-timewrap{position:relative;flex:1}

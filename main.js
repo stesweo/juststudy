@@ -17,8 +17,8 @@ let current = null;      // the website currently on screen
 let lastLeft = null;     // the website you just left for JustStudy (Forward on the JustStudy screen returns to it)
 const sites = new Map(); // url -> { view, url } (kept alive so you return to where you were)
 
-const MAX_SITES = 2;                    // websites kept in memory at once (the one on screen + the most recent other)
-const SITE_IDLE_MS = 10 * 60 * 1000;    // a website left alone on the JustStudy screen this long is closed to free memory
+const MAX_SITES = 1;                    // websites kept in memory at once (leaving a site closes it, except the last one you left, for Forward)
+const SITE_IDLE_MS = 2 * 60 * 1000;     // a website left alone on the JustStudy screen this long is closed to free memory
 const SITE_PARTITION = 'persist:sites'; // keeps your logins (Google, ALLEN...) between launches
 const ESC_HOLD_MS = 600;                // hold Esc this long on a website to go back to JustStudy
 
@@ -370,7 +370,7 @@ function createSite(url) {
     if (current && current.view === view) pushHud();
   });
 
-  ensureExtensions().then(() => { if (!wc.isDestroyed()) wc.loadURL(url); }); // extensions start with the first website, not at launch
+  wc.loadURL(url);
   const entry = { view, url, used: Date.now() };
   sites.set(url, entry);
   return entry;
@@ -499,27 +499,9 @@ function createWindow() {
   });
 }
 
-/* ---------- Chrome extensions (unpacked folders in ./extensions, e.g. extensions/ublock) for the websites ---------- */
-let extP = null;
-function ensureExtensions() { return extP || (extP = loadExtensions()); }
-function loadExtensions() {
-  const fs = require('fs');
-  const dir = app.isPackaged ? path.join(process.resourcesPath, 'extensions') : path.join(__dirname, 'extensions');
-  let names = [];
-  try { names = fs.readdirSync(dir); } catch (e) { return Promise.resolve(); }
-  const ses = session.fromPartition(SITE_PARTITION);
-  return Promise.all(names.map((n) => {
-    const full = path.join(dir, n);
-    if (!fs.existsSync(path.join(full, 'manifest.json'))) return null;
-    return ses.loadExtension(full, { allowFileAccess: true })
-      .then((x) => console.log('Extension loaded:', x.name))
-      .catch((e) => console.warn('Extension failed:', n, e && e.message));
-  }));
-}
-
 app.whenReady().then(() => {
   // Private DNS (DNS-over-HTTPS) through AdGuard: blocks ad and tracker domains.
-  // 'secure' = never fall back to the normal DNS. Change to 'automatic' if a network blocks DoH.
+  // 'automatic' = use AdGuard's DNS-over-HTTPS, fall back to the normal DNS if a network blocks it ('secure' never falls back).
   app.configureHostResolver({
     enableBuiltInResolver: true,
     secureDnsMode: 'automatic',

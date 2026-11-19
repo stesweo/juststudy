@@ -1556,7 +1556,7 @@ function rainBuffer(ctx){
   if(rainP)return rainP;
   var bin=atob(document.getElementById('rainData').textContent.trim()),n=bin.length,u=new Uint8Array(n);
   for(var i=0;i<n;i++)u[i]=bin.charCodeAt(i);
-  rainP=new Promise(function(res,rej){ctx.decodeAudioData(u.buffer,res,rej)}).then(function(b){rainBuf=b;return b},function(e){rainP=null;throw e});
+  rainP=new Promise(function(res,rej){ctx.decodeAudioData(u.buffer,res,rej)}).then(function(b){rainBuf=b;var rd=document.getElementById('rainData');if(rd)rd.textContent='';return b},function(e){rainP=null;throw e});
   return rainP;
 }
 function startSound(type){
