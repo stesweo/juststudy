@@ -29,5 +29,5 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v7
         with:
-          path: dist/JustStudy-Setup.exe
+          path: dist/*.exe
           archive: false
