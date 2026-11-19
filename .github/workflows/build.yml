@@ -18,7 +18,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Write Google Tasks config from repo secrets
         shell: bash
-        run: node -e "require('fs').writeFileSync('google-config.json', JSON.stringify({clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET}))"
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('google-config.json',JSON.stringify({clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET}))"
         env:
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
