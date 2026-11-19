@@ -6,12 +6,11 @@ const gt = require('./google-tasks');
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let win;
-let bar = null;          // slim toolbar shown above a website (back / forward / reload / home)
 let current = null;      // the website currently on screen
 const sites = new Map(); // url -> { view, url } (kept alive so you return to where you were)
 
 const SITE_PARTITION = 'persist:sites'; // keeps your logins (Google, ALLEN...) between launches
-const BAR_H = 36;
+const ESC_HOLD_MS = 600;                // hold Esc this long on a website to go back to JustStudy
 
 // Hides the vertical scrollbar on websites; scrolling itself keeps working.
 // (scrollbar-width/-color are forced to "auto" so the ::-webkit-scrollbar rule is honoured.)
@@ -28,9 +27,23 @@ function toggleFullScreen() {
   if (win && !win.isDestroyed()) win.setFullScreen(!win.isFullScreen());
 }
 
-// Shortcuts that must work whichever view has focus (main page, website or toolbar)
+/* ---------- hold Esc on a website -> back to JustStudy (a quick tap still goes to the page) ---------- */
+let escTimer = null;
+let escConsumed = false; // the hold already fired; swallow the key's auto-repeats until it is released
+function clearEsc() { clearTimeout(escTimer); escTimer = null; }
+
+// Shortcuts that must work whichever view has focus (main page or website)
 function hookKeys(wc, isSite) {
   wc.on('before-input-event', (event, input) => {
+    if (input.key === 'Escape') {
+      if (input.type === 'keyUp') { clearEsc(); escConsumed = false; return; }
+      if (input.type !== 'keyDown') return;
+      if (escConsumed) { event.preventDefault(); return; }
+      if (isSite && current && !escTimer && !input.isAutoRepeat) {
+        escTimer = setTimeout(() => { escTimer = null; escConsumed = true; goHome(); }, ESC_HOLD_MS);
+      }
+      return; // taps are left alone so websites keep their own Esc behaviour
+    }
     if (input.type !== 'keyDown') return;
     const plain = !input.alt && !input.control && !input.meta && !input.shift;
     if (input.key === 'F11' && plain) {
@@ -48,38 +61,49 @@ function hookKeys(wc, isSite) {
   });
 }
 
-/* ---------- websites open inside the main window ---------- */
+/* ---------- websites open inside the main window, edge to edge (no toolbar) ---------- */
 function layout() {
   if (!win || win.isDestroyed()) return;
   const [w, h] = win.getContentSize();
-  if (bar) bar.setBounds({ x: 0, y: 0, width: w, height: BAR_H });
-  if (current) current.view.setBounds({ x: 0, y: BAR_H, width: w, height: Math.max(0, h - BAR_H) });
+  if (current) current.view.setBounds({ x: 0, y: 0, width: w, height: h });
 }
 
-function ensureBar() {
-  if (bar) return;
-  bar = new WebContentsView({
-    webPreferences: {
-      preload: path.join(__dirname, 'sitebar-preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true
+/* ---------- click-through clock + stopwatch drawn over the website (same readout as the DVD screen) ---------- */
+// Runs inside the website. It is a fixed, pointer-events:none element, so every click goes to the page below.
+const HUD_FN = `(d) => {
+  const ID = '__juststudy_hud';
+  let el = document.getElementById(ID);
+  if (!el || !el.isConnected) {
+    el = document.createElement('div');
+    el.id = ID;
+    el.setAttribute('aria-hidden', 'true');
+    const s = (n, css) => { const e = document.createElement('div'); for (const k in css) e.style.setProperty(k, css[k], 'important'); n.append(e); return e; };
+    const box = { position: 'fixed', left: '31px', bottom: '22px', 'z-index': '2147483647', 'pointer-events': 'none',
+      'user-select': 'none', 'line-height': '1', opacity: '.55', color: '#fff', 'mix-blend-mode': 'difference',
+      margin: '0', padding: '0', background: 'none', border: '0', 'font-weight': '500' };
+    for (const k in box) el.style.setProperty(k, box[k], 'important');
+    s(el, { font: '600 30px Georgia,"Times New Roman",serif', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'now';
+    s(el, { font: '500 13px system-ui,"Segoe UI",sans-serif', 'letter-spacing': '.12em', 'text-transform': 'uppercase', margin: '12px 0 8px' }).dataset.k = 'st';
+    s(el, { font: '500 35px ui-monospace,Menlo,Consolas,monospace', 'letter-spacing': '-.02em', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'sw';
+    document.documentElement.appendChild(el);
+  }
+  for (const k of ['now', 'st', 'sw']) { const n = el.querySelector('[data-k=' + k + ']'); if (n && n.textContent !== d[k]) n.textContent = d[k]; }
+}`;
+
+let hudTimer = null;
+async function pushHud() {
+  if (!current || !win || win.isDestroyed()) return;
+  const site = current.view.webContents;
+  if (site.isDestroyed()) return;
+  try {
+    const d = await win.webContents.executeJavaScript('window.__hud && window.__hud()');
+    if (d && current && current.view.webContents === site) {
+      await site.executeJavaScript('(' + HUD_FN + ')(' + JSON.stringify(d) + ')');
     }
-  });
-  hookKeys(bar.webContents, false);
-  bar.webContents.loadFile(path.join(__dirname, 'app', 'sitebar.html'));
+  } catch (e) { /* page is mid-navigation; the next tick will retry */ }
 }
-
-function pushState() {
-  if (!bar || bar.webContents.isDestroyed()) return;
-  const wc = current && !current.view.webContents.isDestroyed() ? current.view.webContents : null;
-  bar.webContents.send('site:state', wc ? {
-    title: wc.getTitle() || wc.getURL(),
-    canBack: wc.navigationHistory.canGoBack(),
-    canForward: wc.navigationHistory.canGoForward(),
-    loading: wc.isLoading()
-  } : null);
-}
+function startHud() { clearInterval(hudTimer); hudTimer = setInterval(pushHud, 1000); pushHud(); }
+function stopHud() { clearInterval(hudTimer); hudTimer = null; }
 
 function createSite(url) {
   const view = new WebContentsView({
@@ -101,9 +125,25 @@ function createSite(url) {
     return { action: 'deny' };
   });
 
-  wc.on('dom-ready', () => { wc.insertCSS(HIDE_VSCROLL_CSS).catch(() => {}); });
-  ['page-title-updated', 'did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading']
-    .forEach((ev) => wc.on(ev, () => { if (current && current.view === view) pushState(); }));
+  // The toolbar is gone, so back / forward / reload / home live in the right-click menu (and the shortcuts)
+  wc.on('context-menu', (e, params) => {
+    const nav = wc.navigationHistory;
+    Menu.buildFromTemplate([
+      { label: 'Back', enabled: nav.canGoBack(), click: navBack },
+      { label: 'Forward', enabled: nav.canGoForward(), click: navForward },
+      { label: 'Reload', click: () => wc.reload() },
+      { label: 'Back to JustStudy  (hold Esc)', click: goHome },
+      { type: 'separator' },
+      { role: 'copy', enabled: params.editFlags.canCopy },
+      { role: 'paste', enabled: params.editFlags.canPaste },
+      { role: 'selectAll' }
+    ]).popup({ window: win });
+  });
+
+  wc.on('dom-ready', () => {
+    wc.insertCSS(HIDE_VSCROLL_CSS).catch(() => {});
+    if (current && current.view === view) pushHud();
+  });
 
   wc.loadURL(url);
   const entry = { view, url };
@@ -122,19 +162,16 @@ function openSite(url) {
   if (current && current !== entry) current.view.setVisible(false);
   current = entry;
 
-  ensureBar();
   win.contentView.addChildView(entry.view);
-  win.contentView.addChildView(bar); // toolbar stays on top
   entry.view.setVisible(true);
-  bar.setVisible(true);
   layout();
   entry.view.webContents.focus();
-  pushState();
+  startHud();
 }
 
 function goHome() {
+  stopHud();
   if (current) { current.view.setVisible(false); current = null; }
-  if (bar) bar.setVisible(false);
   if (win && !win.isDestroyed()) win.webContents.focus();
 }
 function navBack() {
@@ -146,16 +183,6 @@ function navForward() {
   if (wc && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
 }
 
-// Toolbar buttons (only the toolbar itself may send these)
-ipcMain.on('site:cmd', (e, cmd) => {
-  if (!bar || e.sender !== bar.webContents || !current) return;
-  if (cmd === 'back') navBack();
-  else if (cmd === 'forward') navForward();
-  else if (cmd === 'reload') current.view.webContents.reload();
-  else if (cmd === 'home') goHome();
-});
-ipcMain.on('site:ready', (e) => { if (bar && e.sender === bar.webContents) pushState(); });
-
 // ---- Google Tasks (official API) ----
 const str = (v) => String(v == null ? '' : v);
 ipcMain.handle('gt:status', () => ({ configured: gt.isConfigured(), signedIn: gt.isSignedIn() }));
@@ -163,7 +190,15 @@ ipcMain.handle('gt:signIn', (_, mode) => gt.signIn(mode === 'browser' ? 'browser
 ipcMain.handle('gt:signOut', () => gt.signOut());
 ipcMain.handle('gt:lists', () => gt.getLists());
 ipcMain.handle('gt:tasks', (_, listId) => gt.getTasks(str(listId)));
-ipcMain.handle('gt:add', (_, listId, title) => gt.addTask(str(listId), str(title)));
+ipcMain.handle('gt:createList', (_, title) => gt.createList(str(title)));
+ipcMain.handle('gt:renameList', (_, id, title) => gt.renameList(str(id), str(title)));
+ipcMain.handle('gt:deleteList', (_, id) => gt.deleteList(str(id)));
+ipcMain.handle('gt:clearDone', (_, listId) => gt.clearCompleted(str(listId)));
+const obj = (v) => (v && typeof v === 'object' ? v : {});
+ipcMain.handle('gt:add', (_, listId, f, o) => gt.addTask(str(listId), obj(f), obj(o)));
+ipcMain.handle('gt:update', (_, listId, id, f) => gt.updateTask(str(listId), str(id), obj(f)));
+ipcMain.handle('gt:move', (_, listId, id, o) => gt.moveTask(str(listId), str(id), obj(o)));
+ipcMain.handle('gt:moveList', (_, from, id, to) => gt.moveToList(str(from), str(id), str(to)));
 ipcMain.handle('gt:done', (_, listId, id, done) => gt.setDone(str(listId), str(id), !!done));
 ipcMain.handle('gt:delete', (_, listId, id) => gt.deleteTask(str(listId), str(id)));
 
@@ -186,6 +221,8 @@ function createWindow() {
   });
 
   hookKeys(win.webContents, false);
+  // The window title always stays "JustStudy" (never the page names)
+  win.on('page-title-updated', (e) => e.preventDefault());
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
 
   // ALLEN, NEET PYQ... open inside this same window (and stay fullscreen if it is)
@@ -211,8 +248,8 @@ function createWindow() {
 
   win.on('closed', () => {
     for (const { view } of sites.values()) { try { view.webContents.close(); } catch (e) {} }
-    if (bar) { try { bar.webContents.close(); } catch (e) {} }
-    sites.clear(); current = null; bar = null; win = null;
+    stopHud(); clearEsc();
+    sites.clear(); current = null; win = null;
   });
 }
 

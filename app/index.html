@@ -83,6 +83,11 @@ button:disabled{cursor:default}
   text-shadow:0 0 14px color-mix(in srgb,var(--ring) 60%,transparent);
 }
 .now .d{display:inline-block;width:.62em;text-align:center}
+/* Google Tasks panel open: page makes room for it and nothing floats above it */
+body.gt-open{padding-right:var(--gt-w,420px);transition:padding-right .22s ease}
+body.gt-open .now{z-index:1}
+body.gt-open .greet{left:calc((100% - var(--gt-w,420px))/2)}
+@media (prefers-reduced-motion:reduce){body.gt-open{transition:none}}
 .now i{display:inline-block;width:.3em;text-align:center;font-style:normal}
 @media (min-width:1200px){
   .wrap{max-width:1480px}
@@ -2091,6 +2096,10 @@ function dvdHud(){
   $('#dhSt').textContent=$('#dialSub').textContent+' \u00b7 '+$('#dialSt').textContent;
   $('#dhSw').textContent=lastClock;
 }
+/* read by the desktop app to draw the same readout over websites */
+window.__hud=function(){
+  return {now:lastNow,st:$('#dialSub').textContent+' \u00b7 '+$('#dialSt').textContent,sw:lastClock};
+};
 function setDvdOnly(flag){
   if(flag===dvdOnly)return;
   dvdOnly=flag;

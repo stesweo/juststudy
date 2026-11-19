@@ -17,7 +17,6 @@
     "files": [
       "main.js",
       "preload.js",
-      "sitebar-preload.js",
       "google-tasks.js",
       "google-config.json",
       "app/**/*"

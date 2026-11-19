@@ -226,19 +226,83 @@ async function paged(basePath, extra = {}) {
 
 const enc = (s) => encodeURIComponent(String(s));
 
+// Only whitelisted fields ever reach Google; dates must look like YYYY-MM-DD.
+function cleanFields(f = {}) {
+  const o = {};
+  if (typeof f === 'string') f = { title: f };
+  if ('title' in f) o.title = String(f.title == null ? '' : f.title).slice(0, 1024);
+  if ('notes' in f) o.notes = String(f.notes == null ? '' : f.notes).slice(0, 8192);
+  if ('due' in f) {
+    const m = f.due && /^(\d{4}-\d{2}-\d{2})/.exec(String(f.due));
+    o.due = m ? `${m[1]}T00:00:00.000Z` : null; // the Tasks API only keeps the date part
+  }
+  if ('status' in f) {
+    o.status = f.status === 'completed' ? 'completed' : 'needsAction';
+    if (o.status === 'needsAction') o.completed = null;
+  }
+  return o;
+}
+
+const shape = (t) => ({
+  id: t.id, title: t.title || '', notes: t.notes || '', status: t.status,
+  due: t.due || null, parent: t.parent || null, position: t.position || '',
+});
+
+async function getTasks(listId) {
+  const items = await paged(`/lists/${enc(listId)}/tasks`, { showCompleted: 'true', showHidden: 'true' });
+  return items.map(shape).sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+}
+
+function addTask(listId, fields, opts = {}) {
+  const q = new URLSearchParams();
+  if (opts.parent) q.set('parent', String(opts.parent));
+  if (opts.previous) q.set('previous', String(opts.previous));
+  const qs = q.toString();
+  return api('POST', `/lists/${enc(listId)}/tasks${qs ? '?' + qs : ''}`, cleanFields(fields)).then(shape);
+}
+
+// Reorder / re-parent inside one list.
+function moveTask(listId, id, opts = {}) {
+  const q = new URLSearchParams();
+  if (opts.parent) q.set('parent', String(opts.parent));
+  if (opts.previous) q.set('previous', String(opts.previous));
+  const qs = q.toString();
+  return api('POST', `/lists/${enc(listId)}/tasks/${enc(id)}/move${qs ? '?' + qs : ''}`);
+}
+
+// The API cannot move across lists, so copy (with sub-tasks) and delete the original.
+async function moveToList(srcId, id, dstId) {
+  const all = await getTasks(srcId);
+  const t = all.find((x) => x.id === id);
+  if (!t) throw new Error('Task not found.');
+  const copy = (x, parent) => addTask(dstId, { title: x.title, notes: x.notes, due: x.due, status: x.status }, { parent });
+  const created = await copy(t);
+  const map = { [t.id]: created.id };
+  let prev = null;
+  for (const k of all.filter((x) => x.parent === id)) {
+    const c = await addTask(dstId, { title: k.title, notes: k.notes, due: k.due, status: k.status }, { parent: created.id, previous: prev });
+    map[k.id] = c.id; prev = c.id;
+  }
+  await api('DELETE', `/lists/${enc(srcId)}/tasks/${enc(id)}`);
+  return map;
+}
+
 module.exports = {
   isConfigured: () => !!getConfig(),
   isSignedIn: () => !!loadRefresh(),
   signIn,
   signOut,
-  getLists: async () =>
-    (await paged('/users/@me/lists')).map((l) => ({ id: l.id, title: l.title })),
-  getTasks: async (listId) =>
-    (await paged(`/lists/${enc(listId)}/tasks`, { showCompleted: 'true', showHidden: 'true' }))
-      .map((t) => ({ id: t.id, title: t.title || '', status: t.status, due: t.due || null, parent: t.parent || null })),
-  addTask: (listId, title) => api('POST', `/lists/${enc(listId)}/tasks`, { title: String(title).slice(0, 1024) }),
+  getLists: async () => (await paged('/users/@me/lists')).map((l) => ({ id: l.id, title: l.title })),
+  createList: (title) => api('POST', '/users/@me/lists', { title: String(title).slice(0, 1024) || 'Untitled list' }).then((l) => ({ id: l.id, title: l.title })),
+  renameList: (id, title) => api('PATCH', `/users/@me/lists/${enc(id)}`, { title: String(title).slice(0, 1024) }),
+  deleteList: (id) => api('DELETE', `/users/@me/lists/${enc(id)}`),
+  clearCompleted: (listId) => api('POST', `/lists/${enc(listId)}/clear`),
+  getTasks,
+  addTask,
+  updateTask: (listId, id, fields) => api('PATCH', `/lists/${enc(listId)}/tasks/${enc(id)}`, cleanFields(fields)).then(shape),
   setDone: (listId, id, done) =>
-    api('PATCH', `/lists/${enc(listId)}/tasks/${enc(id)}`,
-      done ? { status: 'completed' } : { status: 'needsAction', completed: null }),
+    api('PATCH', `/lists/${enc(listId)}/tasks/${enc(id)}`, cleanFields({ status: done ? 'completed' : 'needsAction' })),
   deleteTask: (listId, id) => api('DELETE', `/lists/${enc(listId)}/tasks/${enc(id)}`),
+  moveTask,
+  moveToList,
 };
