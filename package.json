@@ -23,11 +23,8 @@
       "google-config.json",
       "app/**/*"
     ],
-    "win": {
-      "target": "portable"
-    },
-    "portable": {
-      "artifactName": "JustStudy.exe"
+   "win": { "target": "nsis" },
+   "nsis": { "oneClick": true, "perMachine": false, "artifactName": "JustStudy-Setup.exe" }
     },
     "mac": {
       "target": "dmg",
