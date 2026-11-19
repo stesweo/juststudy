@@ -21,3 +21,10 @@ contextBridge.exposeInMainWorld('gtasks', {
   moveToList: call('gt:moveList'),   // (fromListId, taskId, toListId) -> { oldId: newId }
   aqiFit: call('aqi:fit'),           // -> { top, height } | null  (centres + recolours the AQI card)
 });
+
+// Mouse side buttons on the JustStudy screen too (Forward returns to the website you just left).
+['mousedown', 'mouseup', 'auxclick'].forEach((t) => window.addEventListener(t, (e) => {
+  if (!e.isTrusted || (e.button !== 3 && e.button !== 4)) return;
+  e.preventDefault();
+  if (t === 'mouseup') ipcRenderer.send('nav:side', e.button === 3 ? 'back' : 'forward');
+}, true));

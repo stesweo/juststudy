@@ -18,6 +18,7 @@
       "main.js",
       "preload.js",
       "nav-preload.js",
+      "site-preload.js",
       "google-tasks.js",
       "google-config.json",
       "app/**/*"

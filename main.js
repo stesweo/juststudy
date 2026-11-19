@@ -190,6 +190,16 @@ function showNav() {
 }
 function hideNav() { if (navView) { try { navView.setVisible(false); } catch (e) {} } }
 const refocus = () => { if (current && !current.view.webContents.isDestroyed()) current.view.webContents.focus(); };
+// Mouse side buttons / app-commands: de-duplicated, because Windows can report one click through both paths
+let lastSide = 0;
+function sideNav(dir) {
+  const n = Date.now();
+  if (n - lastSide < 300) return;
+  lastSide = n;
+  if (dir === 'back') navBack(); else navForward();
+  refocus();
+}
+ipcMain.on('nav:side', (_, dir) => sideNav(dir === 'back' ? 'back' : 'forward'));
 ipcMain.on('nav:back', () => { navBack(); refocus(); });
 ipcMain.on('nav:forward', () => { navForward(); refocus(); });
 
@@ -249,7 +259,7 @@ function ensureCurtain() {
   curtain = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   curtain.setBackgroundColor('#00000000');
   curtainReady = curtain.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity '+(FADE_MS/2000)+'s ease}</style><body>'));
+    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity '+(FADE_MS/1000)+'s ease}</style><body>'));
   return curtainReady;
 }
 function sizeCurtain() {
@@ -287,6 +297,7 @@ function createSite(url) {
   const view = new WebContentsView({
     webPreferences: {
       partition: SITE_PARTITION,
+      preload: path.join(__dirname, 'site-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -438,8 +449,8 @@ function createWindow() {
     win.on(ev, () => { layout(); setTimeout(layout, 120); })
   );
   win.on('app-command', (e, cmd) => {
-    if (cmd === 'browser-backward') navBack();   // does nothing on the JustStudy screen
-    if (cmd === 'browser-forward') navForward(); // on the JustStudy screen: back to the website you just left
+    if (cmd === 'browser-backward') sideNav('back');   // does nothing on the JustStudy screen
+    if (cmd === 'browser-forward') sideNav('forward'); // on the JustStudy screen: back to the website you just left
   });
 
   win.on('closed', () => {
