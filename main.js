@@ -249,7 +249,7 @@ function ensureCurtain() {
   curtain = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   curtain.setBackgroundColor('#00000000');
   curtainReady = curtain.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity '+(FADE_MS/1000)+'s ease}</style><body>'));
+    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity '+(FADE_MS/2000)+'s ease}</style><body>'));
   return curtainReady;
 }
 function sizeCurtain() {
