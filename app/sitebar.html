@@ -1,0 +1,31 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="color-scheme" content="dark">
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0d0d11;color:#e9e9ee;
+    font:13px system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-user-select:none;user-select:none}
+  body{display:flex;align-items:center;gap:6px;padding:0 8px;border-bottom:1px solid #26262d;box-sizing:border-box}
+  button{height:26px;min-width:28px;padding:0 9px;border-radius:7px;border:1px solid #2e2e34;background:#16161b;
+    color:inherit;font:inherit;cursor:pointer}
+  button:hover:not(:disabled){border-color:#6b6b76;background:#1d1d24}
+  button:disabled{opacity:.35;cursor:default}
+  #home{font-weight:600}
+  #title{flex:1;min-width:0;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#a9a9b4}
+</style></head>
+<body>
+  <button id="home" title="Back to JustStudy (Ctrl+W)">⌂ JustStudy</button>
+  <button id="back" title="Back (Alt+Left)" disabled>‹</button>
+  <button id="forward" title="Forward (Alt+Right)" disabled>›</button>
+  <button id="reload" title="Reload (Ctrl+R)">↻</button>
+  <span id="title"></span>
+<script>
+  const $ = (id) => document.getElementById(id);
+  ['home', 'back', 'forward', 'reload'].forEach((n) => $(n).addEventListener('click', () => sitebar.cmd(n)));
+  sitebar.onState((s) => {
+    if (!s) return;
+    $('back').disabled = !s.canBack;
+    $('forward').disabled = !s.canForward;
+    $('title').textContent = (s.loading ? 'Loading… ' : '') + (s.title || '');
+  });
+  sitebar.ready();
+</script>
+</body></html>

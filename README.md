@@ -18,7 +18,12 @@ Output goes to `dist/`.
 - Data (scores, settings, local-mode study days) is saved in the app's own
   localStorage, so it persists between launches.
 - Internet is still needed for the weather, AQI widget and Google Fonts.
-- Most external links open in an in-app window (logins are kept).
+- ALLEN and NEET PYQs are buttons in the top right. They open inside the main window (logins are kept)
+  under a slim toolbar (home / back / forward / reload). Alt+Left/Right = back/forward, Ctrl+R = reload,
+  Ctrl+W = back to JustStudy.
+- F11 toggles fullscreen for the whole app, websites included. Esc does not exit it.
+- Network requests use private DNS (AdGuard DNS-over-HTTPS) to block ad/tracker domains. If a network
+  blocks DoH, change `secureDnsMode` to `'automatic'` in `main.js`.
 - To change the icon, add `build/icon.png` (512x512) before building.
 
 ## Build the Windows installer on GitHub
@@ -28,7 +33,7 @@ Output goes to `dist/`.
 4. Download the .exe from the finished run's Artifacts.
 
 ## Google Tasks panel
-Menu (top right) -> Google Tasks opens a built-in panel (view, add, tick off, delete),
+The Google Tasks button (top right) opens a built-in panel (view, add, tick off, delete),
 using Google's official Tasks API. Sign-in happens in a small in-app window; after that
 the app stays signed in (token stored encrypted with your OS keychain).
 If Google refuses the in-app window, use "Sign in using my browser instead".
