@@ -1,5 +1,6 @@
-const { app, BrowserWindow, shell, Menu } = require('electron');
+const { app, BrowserWindow, shell, Menu, ipcMain } = require('electron');
 const path = require('path');
+const gt = require('./google-tasks');
 
 // Only one instance at a time
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -67,6 +68,17 @@ function openSite(url) {
   w.loadURL(url);
 }
 
+// ---- Google Tasks (official API) ----
+const str = (v) => String(v == null ? '' : v);
+ipcMain.handle('gt:status', () => ({ configured: gt.isConfigured(), signedIn: gt.isSignedIn() }));
+ipcMain.handle('gt:signIn', (_, mode) => gt.signIn(mode === 'browser' ? 'browser' : 'app'));
+ipcMain.handle('gt:signOut', () => gt.signOut());
+ipcMain.handle('gt:lists', () => gt.getLists());
+ipcMain.handle('gt:tasks', (_, listId) => gt.getTasks(str(listId)));
+ipcMain.handle('gt:add', (_, listId, title) => gt.addTask(str(listId), str(title)));
+ipcMain.handle('gt:done', (_, listId, id, done) => gt.setDone(str(listId), str(id), !!done));
+ipcMain.handle('gt:delete', (_, listId, id) => gt.deleteTask(str(listId), str(id)));
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
@@ -77,6 +89,7 @@ function createWindow() {
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,

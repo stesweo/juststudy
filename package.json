@@ -14,7 +14,7 @@
   "build": {
     "appId": "com.juststudy.desktop",
     "productName": "JustStudy",
-    "files": ["main.js", "app/**/*"],
+    "files": ["main.js", "preload.js", "google-tasks.js", "google-config.json", "app/**/*"],
     "win": { "target": "nsis" },
     "mac": { "target": "dmg", "category": "public.app-category.education" },
     "linux": { "target": ["AppImage", "deb"], "category": "Education" }

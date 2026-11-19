@@ -18,7 +18,7 @@ Output goes to `dist/`.
 - Data (scores, settings, local-mode study days) is saved in the app's own
   localStorage, so it persists between launches.
 - Internet is still needed for the weather, AQI widget and Google Fonts.
-- External links open in your default browser.
+- Most external links open in an in-app window (logins are kept).
 - To change the icon, add `build/icon.png` (512x512) before building.
 
 ## Build the Windows installer on GitHub
@@ -26,3 +26,18 @@ Output goes to `dist/`.
 2. Create a release with tag `music` and attach `classical-music.ogg` to it.
 3. Actions tab -> "Build Windows installer" -> Run workflow.
 4. Download the .exe from the finished run's Artifacts.
+
+## Google Tasks panel
+Menu (top right) -> Google Tasks opens a built-in panel (view, add, tick off, delete),
+using Google's official Tasks API. Sign-in happens in a small in-app window; after that
+the app stays signed in (token stored encrypted with your OS keychain).
+If Google refuses the in-app window, use "Sign in using my browser instead".
+
+### One-time setup
+1. console.cloud.google.com -> new project -> enable **Google Tasks API**.
+2. Google Auth Platform: audience **External**, add scope `https://www.googleapis.com/auth/tasks`,
+   add your Gmail under **Test users** (or publish the app to avoid the 7-day sign-in expiry).
+3. Credentials -> Create credentials -> OAuth client ID -> **Desktop app**.
+4. Copy `google-config.example.json` to `google-config.json` and paste the Client ID and secret.
+   (It is git-ignored. For the GitHub installer build, add repo secrets
+   `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` - the workflow writes the file for you.)
