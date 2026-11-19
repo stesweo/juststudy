@@ -2,7 +2,7 @@
   "name": "juststudy",
   "productName": "JustStudy",
   "version": "1.0.0",
-  "description": "JustStudy",
+  "description": "JustStudy desktop app",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -17,6 +17,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "nav-preload.js",
       "google-tasks.js",
       "google-config.json",
       "app/**/*"

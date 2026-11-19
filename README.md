@@ -8,8 +8,8 @@ Electron wrapper around your JustStudy.html (kept at `app/index.html`).
    npm install
    npm start
 
-## Build an installer
-   npm run build:win     # Windows .exe installer
+## Build the app
+   npm run build:win     # Windows standalone .exe (portable, no install)
    npm run build:mac     # macOS .dmg (build on a Mac)
    npm run build:linux   # AppImage + .deb
 Output goes to `dist/`.
@@ -32,10 +32,10 @@ Output goes to `dist/`.
   blocks DoH, change `secureDnsMode` to `'automatic'` in `main.js`.
 - To change the icon, add `build/icon.png` (512x512) before building.
 
-## Build the Windows installer on GitHub
+## Build the Windows exe on GitHub
 1. Upload this folder's contents to a new GitHub repo (browser upload is fine).
 2. Create a release with tag `music` and attach `classical-music.ogg` to it.
-3. Actions tab -> "Build Windows installer" -> Run workflow.
+3. Actions tab -> "Build Windows portable exe" -> Run workflow.
 4. Download the .exe from the finished run's Artifacts.
 
 ## Google Tasks panel
@@ -64,5 +64,5 @@ If Google refuses the in-app window, use "Sign in using my browser instead".
    add your Gmail under **Test users** (or publish the app to avoid the 7-day sign-in expiry).
 3. Credentials -> Create credentials -> OAuth client ID -> **Desktop app**.
 4. Copy `google-config.example.json` to `google-config.json` and paste the Client ID and secret.
-   (It is git-ignored. For the GitHub installer build, add repo secrets
+   (It is git-ignored. For the GitHub exe build, add repo secrets
    `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` - the workflow writes the file for you.)

@@ -153,7 +153,95 @@ async function pushHud() {
 function startHud() { clearInterval(hudTimer); fontsNeeded = true; hudTimer = setInterval(pushHud, 1000); pushHud(); }
 function stopHud() { clearInterval(hudTimer); hudTimer = null; }
 
-/* ---------- 1 s transition (0.5 s fade to black, swap, 0.5 s fade back) between JustStudy and a website ---------- */
+/* ---------- small translucent floating Back / Forward buttons (top left of every website) ---------- */
+let navView = null;
+const NAV_HTML = '<!doctype html><meta charset=utf-8><style>' +
+  'html,body{margin:0;height:100%;background:transparent;overflow:hidden;user-select:none}' +
+  'body{display:flex;gap:6px;padding:4px;box-sizing:border-box}' +
+  'button{width:28px;height:28px;border-radius:50%;border:1px solid rgba(255,255,255,.18);background:rgba(20,20,20,.45);' +
+  'color:#fff;opacity:.55;display:grid;place-items:center;padding:0;cursor:pointer;backdrop-filter:blur(6px);transition:opacity .15s,background .15s}' +
+  'button:hover{opacity:1;background:rgba(20,20,20,.75)}button:disabled{opacity:.22;cursor:default}' +
+  'svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' +
+  '</style><body>' +
+  '<button id=b title="Back" aria-label="Back"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>' +
+  '<button id=f title="Forward" aria-label="Forward"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></button>' +
+  '<script>b.onclick=()=>navApi.back();f.onclick=()=>navApi.forward();' +
+  'navApi.onState(s=>{f.disabled=!s.canForward});</script>';
+function ensureNav() {
+  if (navView) return navView;
+  navView = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: path.join(__dirname, 'nav-preload.js') } });
+  navView.setBackgroundColor('#00000000');
+  navView.webContents.on('did-finish-load', updateNav);
+  navView.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(NAV_HTML));
+  return navView;
+}
+function updateNav() {
+  if (!navView || navView.webContents.isDestroyed()) return;
+  const can = !!(current && !current.view.webContents.isDestroyed() && current.view.webContents.navigationHistory.canGoForward());
+  navView.webContents.send('nav:state', { canForward: can });
+}
+function showNav() {
+  if (!win || win.isDestroyed() || !current) return;
+  const v = ensureNav();
+  win.contentView.addChildView(v); // added last = above the website
+  v.setBounds({ x: 10, y: 10, width: 72, height: 36 });
+  v.setVisible(true);
+  updateNav();
+}
+function hideNav() { if (navView) { try { navView.setVisible(false); } catch (e) {} } }
+const refocus = () => { if (current && !current.view.webContents.isDestroyed()) current.view.webContents.focus(); };
+ipcMain.on('nav:back', () => { navBack(); refocus(); });
+ipcMain.on('nav:forward', () => { navForward(); refocus(); });
+
+/* ---------- AQI card: recolour to #0B0B0B and centre its content top/bottom ---------- */
+const AQI_BASE_TOP = 52, AQI_BASE_H = 88; // the window the app cuts out of aqi.in's card (see .wx-aqi in index.html)
+const AQI_MEASURE = `(() => {
+  const T = ${AQI_BASE_TOP}, B = ${AQI_BASE_TOP + AQI_BASE_H}, BG = '#0B0B0B';
+  const st = document.createElement('style');
+  st.textContent = 'html,body{background:' + BG + '!important}';
+  document.documentElement.appendChild(st);
+  const W = window.innerWidth, sy = window.scrollY;
+  let top = 1e9, bot = -1e9, n = 0;
+  for (const el of document.body.querySelectorAll('*')) {
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    const bgc = cs.backgroundColor, opaque = bgc && bgc !== 'transparent' && !/rgba\\(.*,\\s*0\\)$/.test(bgc);
+    // wide opaque containers (the card itself) take the new background
+    if (el.children.length && opaque && r.width > W * 0.6) { el.style.setProperty('background-color', BG, 'important'); continue; }
+    let content = false;
+    if (el.tagName === 'SVG' || el.tagName === 'svg') content = !el.parentElement.closest('svg');
+    else if (/^(IMG|CANVAS|VIDEO)$/.test(el.tagName)) content = true;
+    else if (!el.closest('svg')) {
+      for (const c of el.childNodes) if (c.nodeType === 3 && c.textContent.trim()) { content = true; break; }
+      if (!content && !el.children.length && (opaque || cs.backgroundImage !== 'none') && r.width < W * 0.9) content = true; // gauge bars, markers
+    }
+    if (!content) continue;
+    const t = r.top + sy, b = r.bottom + sy;
+    if (t < T - 1 || b > B + 1) continue; // header / mascot / anything outside the window is ignored
+    top = Math.min(top, t); bot = Math.max(bot, b); n++;
+  }
+  return n ? { top, bot, n } : null;
+})()`;
+ipcMain.handle('aqi:fit', async () => {
+  if (!win || win.isDestroyed()) return null;
+  try {
+    const frames = win.webContents.mainFrame.framesInSubtree.filter((f) => f !== win.webContents.mainFrame && /aqi\.in/i.test(f.url));
+    for (const f of frames) {
+      const r = await f.executeJavaScript(AQI_MEASURE);
+      if (!r) continue;
+      const gapTop = r.top - AQI_BASE_TOP, gapBot = AQI_BASE_TOP + AQI_BASE_H - r.bot;
+      const p = Math.max(0, Math.min(gapTop, gapBot));          // equal space above and below the content
+      const height = Math.round(r.bot - r.top + 2 * p), top = Math.round(r.top - p);
+      if (height >= 30 && height <= 140) return { top, height };
+    }
+  } catch (e) { /* widget not ready: the app keeps its default window and asks again */ }
+  return null;
+});
+
+/* ---------- 2 s transition (1 s fade to black, swap, 1 s fade back) between JustStudy and a website ---------- */
+const FADE_MS = 1000; // each half; the whole fade takes 2 x FADE_MS
 let curtain = null, curtainReady = null, moving = false, queued = null;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function ensureCurtain() {
@@ -161,7 +249,7 @@ function ensureCurtain() {
   curtain = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
   curtain.setBackgroundColor('#00000000');
   curtainReady = curtain.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
-    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity .5s ease}</style><body>'));
+    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity '+(FADE_MS/1000)+'s ease}</style><body>'));
   return curtainReady;
 }
 function sizeCurtain() {
@@ -180,11 +268,11 @@ async function transition(swap) {
     sizeCurtain();
     win.contentView.addChildView(curtain);
     await curtain.webContents.executeJavaScript("document.body.style.opacity='1'");
-    await sleep(500);
+    await sleep(FADE_MS);
     run();
     win.contentView.addChildView(curtain); // keep it above the view that just appeared
     await curtain.webContents.executeJavaScript("document.body.style.opacity='0'");
-    await sleep(500);
+    await sleep(FADE_MS);
     if (win && !win.isDestroyed()) win.contentView.removeChildView(curtain);
   } catch (e) {
     run();
@@ -230,6 +318,9 @@ function createSite(url) {
     ]).popup({ window: win });
   });
 
+  const navChanged = () => { if (current && current.view === view) updateNav(); };
+  wc.on('did-navigate', navChanged);
+  wc.on('did-navigate-in-page', navChanged);
   wc.on('dom-ready', () => {
     wc.insertCSS(HIDE_VSCROLL_CSS).catch(() => {});
     if (current && current.view === view) pushHud();
@@ -258,6 +349,7 @@ function openSite(url) {
     layout();
     entry.view.webContents.focus();
     startHud();
+    showNav();
   });
 }
 
@@ -265,6 +357,7 @@ function goHome() {
   if (!current) return;
   transition(() => {
     stopHud();
+    hideNav();
     if (current) { lastLeft = current; current.view.setVisible(false); current = null; }
     if (win && !win.isDestroyed()) win.webContents.focus();
   });
@@ -351,7 +444,7 @@ function createWindow() {
 
   win.on('closed', () => {
     for (const { view } of sites.values()) { try { view.webContents.close(); } catch (e) {} }
-    stopHud(); clearEsc(); curtain = null; curtainReady = null; moving = false; queued = null;
+    stopHud(); clearEsc(); navView = null; curtain = null; curtainReady = null; moving = false; queued = null;
     sites.clear(); current = null; lastLeft = null; win = null;
   });
 }

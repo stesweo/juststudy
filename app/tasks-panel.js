@@ -139,6 +139,24 @@
 
   link.addEventListener('click', function (e) { e.preventDefault(); toggle(true); });
 
+  // Scrolling inside the tasks panel must never scroll the main screen behind it:
+  // the wheel is kept inside the panel, and ignored when the list under the cursor can't scroll that way.
+  panel.addEventListener('wheel', function (e) {
+    e.stopPropagation();
+    var n = e.target, dy = e.deltaY;
+    while (n && n !== panel.parentNode) {
+      if (n.nodeType === 1 && n.scrollHeight > n.clientHeight + 1) {
+        var oy = getComputedStyle(n).overflowY;
+        if (oy === 'auto' || oy === 'scroll') {
+          if ((dy < 0 && n.scrollTop > 0) || (dy > 0 && n.scrollTop + n.clientHeight < n.scrollHeight - 1)) return; // it scrolls itself
+        }
+      }
+      if (n === panel) break;
+      n = n.parentNode;
+    }
+    e.preventDefault();
+  }, { passive: false });
+
   // Esc peels one layer at a time: dialog -> menu -> editor -> panel
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || !panel.classList.contains('open')) return;

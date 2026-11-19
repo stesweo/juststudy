@@ -19,4 +19,5 @@ contextBridge.exposeInMainWorld('gtasks', {
   remove: call('gt:delete'),         // (listId, taskId)
   move: call('gt:move'),             // (listId, taskId, { parent, previous })
   moveToList: call('gt:moveList'),   // (fromListId, taskId, toListId) -> { oldId: newId }
+  aqiFit: call('aqi:fit'),           // -> { top, height } | null  (centres + recolours the AQI card)
 });

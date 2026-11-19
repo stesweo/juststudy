@@ -517,7 +517,8 @@ a.wx-tile:hover,a.wx-tile:focus-visible{border-color:#6a6a6a;background:rgba(255
 .wx-s svg{flex:none;display:block}
 .wx-bar{position:relative;height:4px;border-radius:3px;margin-top:5px;background:linear-gradient(90deg,#6fd3a0 0 16.7%,#f2d14b 16.7% 33.3%,#f5a65b 33.3% 50%,#ef5b5b 50% 66.7%,#b57bff 66.7% 100%)}
 .wx-bar i{position:absolute;top:-3px;width:3px;height:10px;border-radius:2px;background:#fff;box-shadow:0 0 0 1px #000;transform:translateX(-50%)}
-.wx-aqi{--aqi-top:52px;--aqi-h:88px;position:relative;margin-top:10px;border-radius:var(--wxr);overflow:hidden;height:var(--aqi-h);background:transparent}
+.wx-aqi{--aqi-top:52px;--aqi-h:88px;position:relative;margin-top:10px;border-radius:var(--wxr);overflow:hidden;height:var(--aqi-h);background:#0B0B0B}
+.wx-aqi iframe,.wx-aqi [data-aqi-widget-payload]{background:#0B0B0B}
 /* the aqi.in card is shifted up so its location header is cut off, and the window ends above the mascot: only the gauge, number and rating remain */
 .wx-aqi [data-aqi-widget-payload]{position:relative;top:calc(var(--aqi-top)*-1)}
 .wx-aqi iframe{display:block;width:100%;border:0}
@@ -856,9 +857,9 @@ requestAnimationFrame(t => { last = t; loop(t); });
         </button>
         <div class="menu" id="sndMenu" role="menu" aria-label="Background sound" hidden></div>
       </div>
-      <a class="nbtn" id="allen" href="https://allen.in/explore/" target="_blank" rel="noopener noreferrer" aria-label="ALLEN" title="ALLEN"><svg width="18" height="18" viewBox="100 90 312 330" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M257 98 405 413H294L277 365H235L220 413H107Z M257 277a16 16 0 1 0 .01 0Z"/></svg></a>
+      <a class="nbtn" id="allen" href="https://allen.in/" target="_blank" rel="noopener noreferrer" aria-label="ALLEN" title="ALLEN"><svg width="18" height="18" viewBox="100 90 312 330" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M257 98 405 413H294L277 365H235L220 413H107Z M257 277a16 16 0 1 0 .01 0Z"/></svg></a>
       <a class="nbtn" id="neetpyq" href="https://questions.examside.com/past-years/medical/neet" target="_blank" rel="noopener noreferrer" aria-label="NEET previous year questions" title="NEET PYQs (ExamSIDE)"><svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4 2h12v3.4H8.2v3.3h6.6v3.3H8.2v3.6H16V18H4z"/></svg></a>
-      <a class="nbtn" id="gtasks" href="https://tasks.google.com/tasks/" target="_blank" rel="noopener noreferrer" aria-label="Google Tasks" title="Google Tasks"><img src="tasks-icon.png" width="26" height="18" alt="" draggable="false"></a>
+      <a class="nbtn" id="gtasks" href="https://tasks.google.com/tasks/" target="_blank" rel="noopener noreferrer" aria-label="Google Tasks" title="Google Tasks"><img src="tasks-icon.png" width="22" height="15" alt="" draggable="false"></a>
     </div>
   </header>
 
@@ -1845,6 +1846,22 @@ function renderSnd(){
       mo.observe(box,{childList:true,subtree:true});
     }
   })();
+  /* The aqi.in card is cross-origin, so the app's main process measures it: recolours it #0B0B0B and
+     centres the gauge/number/rating with equal space above and below. */
+  var aqiFitted=false;
+  function fitAqi(){
+    if(!window.gtasks||!window.gtasks.aqiFit)return;
+    [900,2200,4500].forEach(function(ms){setTimeout(function(){
+      if(aqiFitted||$('#wxPanel').hidden)return;
+      window.gtasks.aqiFit().then(function(r){
+        if(!r||aqiFitted)return;
+        var box=$('#wxAqi');
+        box.style.setProperty('--aqi-top',r.top+'px');
+        box.style.setProperty('--aqi-h',r.height+'px');
+        aqiFitted=true;
+      }).catch(function(){});
+    },ms)});
+  }
   function nudgeAqi(){
     [150,800].forEach(function(ms){setTimeout(function(){
       var f=$('#wxAqi iframe');
@@ -1856,7 +1873,7 @@ function renderSnd(){
     $('#wx').setAttribute('aria-expanded',String(flag));
     if(flag){
       $('#sndMenu').hidden=true;$('#snd').setAttribute('aria-expanded','false');
-      nudgeAqi();
+      nudgeAqi();fitAqi();
       if(!busy&&Date.now()-S.t>10*60*1000)refresh();
     }
   }
