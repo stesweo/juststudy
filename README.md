@@ -20,10 +20,12 @@ Output goes to `dist/`.
 - Internet is still needed for the weather, AQI widget and Google Fonts.
 - ALLEN and NEET PYQs are buttons in the top right. They open inside the main window (logins are kept),
   full screen, with no toolbar. **Hold Esc (~0.6 s) to go back to JustStudy** (a quick tap of Esc still goes
-  to the website). Alt+Left/Right = back/forward, Ctrl+R / F5 = reload, Ctrl+W = back to JustStudy; the
+  to the website). Alt+Left/Right (or the mouse back/forward buttons) = back/forward: **Back on a website's first page returns to JustStudy, and Forward on the JustStudy screen goes back to the website you just left**, Ctrl+R / F5 = reload, Ctrl+W = back to JustStudy; the
   right-click menu on a site also has Back / Forward / Reload / Back to JustStudy.
-- While a website is open, the clock, subject/state and stopwatch (same readout as the DVD screen) float
-  bottom-left, semi-transparent and click-through.
+- While a website is open, the clock, subject/state and stopwatch (same readout and fonts as the DVD screen)
+  float over it, semi-transparent and click-through. Customise button -> "Clock on websites": on/off,
+  transparency and a 3x3 position picker.
+- Going to / from a website uses a 1 s fade (0.5 s to black, 0.5 s back).
 - The window title always stays "JustStudy" (it never shows page names).
 - F11 toggles fullscreen for the whole app, websites included. Esc does not exit it.
 - Network requests use private DNS (AdGuard DNS-over-HTTPS) to block ad/tracker domains. If a network
@@ -41,13 +43,14 @@ The Google Tasks button (top right) opens a built-in panel that works like the G
 - tasks grouped by date (Overdue / Today / Tomorrow / dates / No date) or "My order" (list menu -> Sort by)
 - "Add a task" with title, details, Today / Tomorrow chips, and a date picker with time and repeat
 - click a task to edit it in place; tick the circle to complete; "Completed (n)" folds away
-- hover a task for the star and the ⋮ menu: add/change deadline, add a subtask, delete, move to another list, new list
+- hover a task for the star and the ⋮ menu: add/change/remove deadline, add/change date & time, add a subtask, delete, move to another list, new list
 - drag tasks to reorder; switch lists from the title; list menu: rename, delete list, delete completed, sort, sign out
 - a "Starred" view that gathers starred tasks from every list
 When the panel is open the page makes room for it, so the clock never sits under it.
 
 Google's public Tasks API only stores title, details, date, completed state, sub-tasks and order. So the **time,
-repeat and star** of a task are kept inside this app (on this computer) and don't sync to your phone / Gmail.
+repeat, star and deadline** of a task are kept inside this app (on this computer) and don't sync to your phone / Gmail.
+A **deadline** is separate from the date & time you plan to do the task: it shows as a "Due yesterday / today / tomorrow" chip under the task (red / blue / grey). Google's API has no deadline field, so deadlines live only in this app.
 Repeating tasks create their next copy (daily / weekly / monthly / yearly) when you tick one off.
 "Add attachment" isn't available because the API can't create attachments.
 

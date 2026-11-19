@@ -420,6 +420,12 @@ body.open .cust{opacity:1;transform:none;pointer-events:auto;visibility:visible;
 .frow .rng{width:100%}
 .freset{margin-top:2px;width:100%;height:30px;border-radius:9px;border:1px solid #2e2e34;background:transparent;color:#cfcfd6;font-size:.8rem}
 .freset:hover{background:rgba(255,255,255,.07)}
+.hudgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;width:132px}
+.hudgrid button{height:30px;border-radius:8px;border:1px solid #2e2e34;background:transparent;display:grid;place-items:center;padding:0}
+.hudgrid button i{width:8px;height:8px;border-radius:50%;background:#6b6b76}
+.hudgrid button:hover{background:rgba(255,255,255,.07)}
+.hudgrid button[aria-pressed="true"]{border-color:#8a8a96;background:rgba(255,255,255,.08)}
+.hudgrid button[aria-pressed="true"] i{background:#fff}
 .themes{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;padding:0 0 4px}
 .thm{display:flex;align-items:center;gap:9px;padding:8px;border-radius:10px;border:1px solid transparent;background:transparent;color:#ececec;font-size:.88rem;text-align:left}
 .thm:hover{background:rgba(255,255,255,.06)}
@@ -850,9 +856,9 @@ requestAnimationFrame(t => { last = t; loop(t); });
         </button>
         <div class="menu" id="sndMenu" role="menu" aria-label="Background sound" hidden></div>
       </div>
-      <a class="nbtn" id="allen" href="https://allen.in/" target="_blank" rel="noopener noreferrer" aria-label="ALLEN" title="ALLEN"><svg width="18" height="18" viewBox="100 90 312 330" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M257 98 405 413H294L277 365H235L220 413H107Z M257 277a16 16 0 1 0 .01 0Z"/></svg></a>
+      <a class="nbtn" id="allen" href="https://allen.in/explore/" target="_blank" rel="noopener noreferrer" aria-label="ALLEN" title="ALLEN"><svg width="18" height="18" viewBox="100 90 312 330" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="M257 98 405 413H294L277 365H235L220 413H107Z M257 277a16 16 0 1 0 .01 0Z"/></svg></a>
       <a class="nbtn" id="neetpyq" href="https://questions.examside.com/past-years/medical/neet" target="_blank" rel="noopener noreferrer" aria-label="NEET previous year questions" title="NEET PYQs (ExamSIDE)"><svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M4 2h12v3.4H8.2v3.3h6.6v3.3H8.2v3.6H16V18H4z"/></svg></a>
-      <a class="nbtn" id="gtasks" href="https://tasks.google.com/tasks/" target="_blank" rel="noopener noreferrer" aria-label="Google Tasks" title="Google Tasks"><img src="data:image/png;base64,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" width="18" height="18" alt="" draggable="false"></a>
+      <a class="nbtn" id="gtasks" href="https://tasks.google.com/tasks/" target="_blank" rel="noopener noreferrer" aria-label="Google Tasks" title="Google Tasks"><img src="tasks-icon.png" width="26" height="18" alt="" draggable="false"></a>
     </div>
   </header>
 
@@ -935,6 +941,15 @@ requestAnimationFrame(t => { last = t; loop(t); });
         <div class="frow"><label for="dimMin">Dim after <span id="dimMinV"></span></label><input type="range" class="rng" id="dimMin" min="1" max="30" step="1"></div>
         <div class="frow"><label for="dimFade">Fade time <span id="dimFadeV"></span></label><input type="range" class="rng" id="dimFade" min="1" max="10" step="1"></div>
         <button type="button" class="freset" id="dimReset">Reset to defaults</button>
+      </div></div>
+    </div>
+    <div class="crow" id="hudRow">
+      <button type="button" class="ctog" id="hudTog" role="switch" aria-checked="true"><span>Clock on websites</span><span class="sw"></span></button>
+      <button type="button" class="cchev" id="hudMore" aria-label="Website clock settings" aria-expanded="false"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.5 2.5 4 6l3.5 3.5"/></svg></button>
+      <div class="fly" id="hudFly"><div class="flyin">
+        <div class="frow"><label for="hudTr">Transparency <span id="hudTrV"></span></label><input type="range" class="rng" id="hudTr" min="0" max="90" step="5"></div>
+        <div class="frow"><label>Position</label><div class="hudgrid" id="hudGrid" role="group" aria-label="Clock position on the page"></div></div>
+        <button type="button" class="freset" id="hudReset">Reset to defaults</button>
       </div></div>
     </div>
     <div class="mt">Theme</div>
@@ -2097,8 +2112,35 @@ function dvdHud(){
   $('#dhSw').textContent=lastClock;
 }
 /* read by the desktop app to draw the same readout over websites */
+var HUD_DEF={on:true,tr:45,pos:'bl'},hudPrefs=Object.assign({},HUD_DEF);
+try{var hp=JSON.parse(localStorage.getItem('js.hud')||'null');if(hp&&typeof hp==='object'){
+  if(typeof hp.on==='boolean')hudPrefs.on=hp.on;
+  if(typeof hp.tr==='number'&&hp.tr>=0&&hp.tr<=90)hudPrefs.tr=hp.tr;
+  if(/^[tmb][lcr]$/.test(hp.pos))hudPrefs.pos=hp.pos;
+}}catch(e){}
 window.__hud=function(){
-  return {now:lastNow,st:$('#dialSub').textContent+' \u00b7 '+$('#dialSt').textContent,sw:lastClock};
+  return {now:lastNow,st:$('#dialSub').textContent+' \u00b7 '+$('#dialSt').textContent,sw:lastClock,
+    on:hudPrefs.on,op:(100-hudPrefs.tr)/100,pos:hudPrefs.pos};
+};
+/* the desktop app copies these fonts into websites so the overlay clock matches the DVD screen */
+window.__hudFonts=function(){
+  var link=document.querySelector('link[href*="fonts.googleapis.com"]');
+  if(!link)return Promise.resolve([]);
+  return fetch(link.href).then(function(r){return r.text()}).then(function(css){
+    var re=/\/\*\s*([\w-]+)\s*\*\/\s*@font-face\s*\{([^}]*)\}/g,m,jobs=[],seen={};
+    while((m=re.exec(css))){
+      if(m[1]!=='latin')continue;
+      var fam=/font-family:\s*'?([^';]+)'?/.exec(m[2]),w=/font-weight:\s*([^;]+)/.exec(m[2]),u=/url\(([^)]+)\)/.exec(m[2]);
+      if(!fam||!u||seen[u[1]])continue;
+      seen[u[1]]=1;
+      jobs.push(fetch(u[1].replace(/['"]/g,'')).then(function(r){return r.arrayBuffer()}).then((function(f,wt){return function(buf){
+        var b=new Uint8Array(buf),bin='';
+        for(var i=0;i<b.length;i+=8192)bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));
+        return {family:f,weight:wt,b64:btoa(bin)};
+      }})(fam[1].trim(),w?w[1].trim():'400')));
+    }
+    return Promise.all(jobs);
+  }).catch(function(){return[]});
 };
 function setDvdOnly(flag){
   if(flag===dvdOnly)return;
@@ -2235,6 +2277,15 @@ function custClose(){
   if(!custPanel)return;
   custPanel.hidden=true;custBtn.setAttribute('aria-expanded','false');
   dimRow.classList.remove('pin');$('#dimMore').setAttribute('aria-expanded','false');
+  $('#hudRow').classList.remove('pin');$('#hudMore').setAttribute('aria-expanded','false');
+}
+function saveHud(){try{localStorage.setItem('js.hud',JSON.stringify(hudPrefs))}catch(e){}}
+function renderHud(){
+  $('#hudTog').setAttribute('aria-checked',String(hudPrefs.on));
+  var el=$('#hudTr');el.value=String(hudPrefs.tr);fillRng(el);$('#hudTrV').textContent=hudPrefs.tr+'%';
+  Array.prototype.forEach.call(document.querySelectorAll('#hudGrid button'),function(b){
+    b.setAttribute('aria-pressed',String(b.getAttribute('data-pos')===hudPrefs.pos));
+  });
 }
 function previewDim(){
   dimHole();document.body.classList.add('dimprev');
@@ -2263,6 +2314,19 @@ function changedCust(){saveCust();applyCust();renderCust();lastAct=0;idleReset()
     custPanel.hidden=!open;custBtn.setAttribute('aria-expanded',String(open));
     if(!open){dimRow.classList.remove('pin');$('#dimMore').setAttribute('aria-expanded','false')}
   });
+  var vn={t:'top',m:'middle',b:'bottom'},hn={l:'left',c:'centre',r:'right'};
+  $('#hudGrid').innerHTML=['t','m','b'].map(function(v){return ['l','c','r'].map(function(h){
+    return '<button type="button" data-pos="'+v+h+'" aria-pressed="false" aria-label="'+vn[v]+' '+hn[h]+'"><i></i></button>';
+  }).join('')}).join('');
+  $('#hudGrid').addEventListener('click',function(e){var b=e.target.closest('button');if(b){hudPrefs.pos=b.getAttribute('data-pos');saveHud();renderHud()}});
+  $('#hudTog').addEventListener('click',function(){hudPrefs.on=!hudPrefs.on;saveHud();renderHud()});
+  $('#hudTr').addEventListener('input',function(){hudPrefs.tr=+this.value;saveHud();renderHud()});
+  $('#hudReset').addEventListener('click',function(){hudPrefs=Object.assign({},HUD_DEF);saveHud();renderHud()});
+  $('#hudMore').addEventListener('click',function(e){
+    e.stopPropagation();
+    var row=$('#hudRow'),on=!row.classList.contains('pin');
+    row.classList.toggle('pin',on);this.setAttribute('aria-expanded',String(on));
+  });
   $('#dimMore').addEventListener('click',function(e){
     e.stopPropagation();
     var on=!dimRow.classList.contains('pin');
@@ -2279,7 +2343,7 @@ function changedCust(){saveCust();applyCust();renderCust();lastAct=0;idleReset()
   });
   document.addEventListener('click',function(e){if(!e.target.closest('#cust'))custClose()});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')custClose()});
-  renderCust();
+  renderCust();renderHud();
 })();
 
 renderControls();

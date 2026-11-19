@@ -7,6 +7,7 @@ if (!app.requestSingleInstanceLock()) app.quit();
 
 let win;
 let current = null;      // the website currently on screen
+let lastLeft = null;     // the website you just left for JustStudy (Forward on the JustStudy screen returns to it)
 const sites = new Map(); // url -> { view, url } (kept alive so you return to where you were)
 
 const SITE_PARTITION = 'persist:sites'; // keeps your logins (Google, ALLEN...) between launches
@@ -51,8 +52,13 @@ function hookKeys(wc, isSite) {
       if (!input.isAutoRepeat) toggleFullScreen();
       return;
     }
-    if (!isSite || !current) return;
     const mod = process.platform === 'darwin' ? input.meta : input.control;
+    if (!current) {
+      // On the JustStudy screen: Forward (Alt+Right) goes back to the website you just left
+      if (input.alt && !mod && input.key === 'ArrowRight') { event.preventDefault(); navForward(); }
+      return;
+    }
+    if (!isSite) return;
     if (input.alt && !mod && input.key === 'ArrowLeft') { event.preventDefault(); navBack(); }
     else if (input.alt && !mod && input.key === 'ArrowRight') { event.preventDefault(); navForward(); }
     else if ((mod && !input.alt && input.key.toLowerCase() === 'r') || (plain && input.key === 'F5')) {
@@ -66,31 +72,71 @@ function layout() {
   if (!win || win.isDestroyed()) return;
   const [w, h] = win.getContentSize();
   if (current) current.view.setBounds({ x: 0, y: 0, width: w, height: h });
+  if (moving) sizeCurtain();
 }
 
 /* ---------- click-through clock + stopwatch drawn over the website (same readout as the DVD screen) ---------- */
 // Runs inside the website. It is a fixed, pointer-events:none element, so every click goes to the page below.
-const HUD_FN = `(d) => {
+const HUD_FN = `(d, fonts) => {
   const ID = '__juststudy_hud';
   let el = document.getElementById(ID);
+  if (!d.on) { if (el) el.remove(); return !!window.__jsf; }
+  // Same fonts as the DVD screen (Fraunces / Space Grotesk), copied in from the app once per page
+  if (fonts && !window.__jsf) {
+    window.__jsf = true;
+    for (const f of fonts) {
+      try {
+        const bin = atob(f.b64), u = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+        const ff = new FontFace('JS ' + f.family, u.buffer, { weight: f.weight });
+        ff.load().then(() => document.fonts.add(ff)).catch(() => {});
+      } catch (e) {}
+    }
+  }
   if (!el || !el.isConnected) {
     el = document.createElement('div');
     el.id = ID;
     el.setAttribute('aria-hidden', 'true');
     const s = (n, css) => { const e = document.createElement('div'); for (const k in css) e.style.setProperty(k, css[k], 'important'); n.append(e); return e; };
-    const box = { position: 'fixed', left: '31px', bottom: '22px', 'z-index': '2147483647', 'pointer-events': 'none',
-      'user-select': 'none', 'line-height': '1', opacity: '.55', color: '#fff', 'mix-blend-mode': 'difference',
-      margin: '0', padding: '0', background: 'none', border: '0', 'font-weight': '500' };
+    const SERIF = '"JS Fraunces",Fraunces,Georgia,"Times New Roman",serif', SANS = '"JS Space Grotesk","Space Grotesk",system-ui,"Segoe UI",sans-serif';
+    const box = { position: 'fixed', 'z-index': '2147483647', 'pointer-events': 'none',
+      'user-select': 'none', 'line-height': '1', color: '#fff', 'mix-blend-mode': 'difference',
+      margin: '0', padding: '0', background: 'none', border: '0', 'font-weight': '500', 'white-space': 'nowrap' };
     for (const k in box) el.style.setProperty(k, box[k], 'important');
-    s(el, { font: '600 30px Georgia,"Times New Roman",serif', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'now';
-    s(el, { font: '500 13px system-ui,"Segoe UI",sans-serif', 'letter-spacing': '.12em', 'text-transform': 'uppercase', margin: '12px 0 8px' }).dataset.k = 'st';
-    s(el, { font: '500 35px ui-monospace,Menlo,Consolas,monospace', 'letter-spacing': '-.02em', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'sw';
+    s(el, { 'font-family': SERIF, 'font-weight': '600', 'font-size': '30px', 'letter-spacing': '-.01em', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'now';
+    s(el, { 'font-family': SANS, 'font-weight': '500', 'font-size': '13px', 'letter-spacing': '.12em', 'text-transform': 'uppercase', margin: '12px 0 8px' }).dataset.k = 'st';
+    s(el, { 'font-family': SANS, 'font-weight': '500', 'font-size': '35px', 'letter-spacing': '-.02em', 'font-variant-numeric': 'tabular-nums' }).dataset.k = 'sw';
     document.documentElement.appendChild(el);
   }
+  // transparency + position (top/middle/bottom x left/centre/right)
+  const P = /^[tmb][lcr]$/.test(d.pos) ? d.pos : 'bl', v = P[0], h = P[1], tf = [];
+  const set = (k, val) => el.style.setProperty(k, val, 'important');
+  set('opacity', String(Math.min(1, Math.max(.1, d.op))));
+  set('left', h === 'l' ? '31px' : h === 'c' ? '50%' : 'auto');
+  set('right', h === 'r' ? '31px' : 'auto');
+  set('top', v === 't' ? '22px' : v === 'm' ? '50%' : 'auto');
+  set('bottom', v === 'b' ? '22px' : 'auto');
+  if (h === 'c') tf.push('translateX(-50%)');
+  if (v === 'm') tf.push('translateY(-50%)');
+  set('transform', tf.join(' ') || 'none');
+  set('text-align', h === 'l' ? 'left' : h === 'c' ? 'center' : 'right');
   for (const k of ['now', 'st', 'sw']) { const n = el.querySelector('[data-k=' + k + ']'); if (n && n.textContent !== d[k]) n.textContent = d[k]; }
+  return !!window.__jsf;
 }`;
 
 let hudTimer = null;
+let fontsCache = null, fontsTried = 0;  // fonts are fetched once by the app page, then handed to each website
+let fontsNeeded = true;                 // the current website page does not have them yet
+async function getFonts() {
+  if (fontsCache) return fontsCache;
+  if (Date.now() - fontsTried < 30000) return null; // offline: retry at most every 30 s
+  fontsTried = Date.now();
+  try {
+    const f = await win.webContents.executeJavaScript('window.__hudFonts ? window.__hudFonts() : []');
+    if (Array.isArray(f) && f.length) fontsCache = f;
+  } catch (e) {}
+  return fontsCache;
+}
 async function pushHud() {
   if (!current || !win || win.isDestroyed()) return;
   const site = current.view.webContents;
@@ -98,12 +144,56 @@ async function pushHud() {
   try {
     const d = await win.webContents.executeJavaScript('window.__hud && window.__hud()');
     if (d && current && current.view.webContents === site) {
-      await site.executeJavaScript('(' + HUD_FN + ')(' + JSON.stringify(d) + ')');
+      const fonts = fontsNeeded && d.on ? await getFonts() : null;
+      const has = await site.executeJavaScript('(' + HUD_FN + ')(' + JSON.stringify(d) + ',' + JSON.stringify(fonts) + ')');
+      fontsNeeded = !has;
     }
   } catch (e) { /* page is mid-navigation; the next tick will retry */ }
 }
-function startHud() { clearInterval(hudTimer); hudTimer = setInterval(pushHud, 1000); pushHud(); }
+function startHud() { clearInterval(hudTimer); fontsNeeded = true; hudTimer = setInterval(pushHud, 1000); pushHud(); }
 function stopHud() { clearInterval(hudTimer); hudTimer = null; }
+
+/* ---------- 1 s transition (0.5 s fade to black, swap, 0.5 s fade back) between JustStudy and a website ---------- */
+let curtain = null, curtainReady = null, moving = false, queued = null;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function ensureCurtain() {
+  if (curtainReady) return curtainReady;
+  curtain = new WebContentsView({ webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  curtain.setBackgroundColor('#00000000');
+  curtainReady = curtain.webContents.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(
+    '<!doctype html><style>html{background:transparent}body{margin:0;height:100vh;background:#000;opacity:0;transition:opacity .5s ease}</style><body>'));
+  return curtainReady;
+}
+function sizeCurtain() {
+  if (!curtain || !win || win.isDestroyed()) return;
+  const [w, h] = win.getContentSize();
+  curtain.setBounds({ x: 0, y: 0, width: w, height: h });
+}
+async function transition(swap) {
+  if (!win || win.isDestroyed()) return;
+  if (moving) { queued = swap; return; }   // the latest request wins
+  moving = true;
+  let swapped = false;
+  const run = () => { if (!swapped) { swapped = true; swap(); } };
+  try {
+    await ensureCurtain();
+    sizeCurtain();
+    win.contentView.addChildView(curtain);
+    await curtain.webContents.executeJavaScript("document.body.style.opacity='1'");
+    await sleep(500);
+    run();
+    win.contentView.addChildView(curtain); // keep it above the view that just appeared
+    await curtain.webContents.executeJavaScript("document.body.style.opacity='0'");
+    await sleep(500);
+    if (win && !win.isDestroyed()) win.contentView.removeChildView(curtain);
+  } catch (e) {
+    run();
+    try { win.contentView.removeChildView(curtain); } catch (e2) {}
+  } finally {
+    moving = false;
+    if (queued) { const q = queued; queued = null; transition(q); }
+  }
+}
 
 function createSite(url) {
   const view = new WebContentsView({
@@ -129,7 +219,7 @@ function createSite(url) {
   wc.on('context-menu', (e, params) => {
     const nav = wc.navigationHistory;
     Menu.buildFromTemplate([
-      { label: 'Back', enabled: nav.canGoBack(), click: navBack },
+      { label: 'Back', click: navBack }, // on the first page this returns to JustStudy
       { label: 'Forward', enabled: nav.canGoForward(), click: navForward },
       { label: 'Reload', click: () => wc.reload() },
       { label: 'Back to JustStudy  (hold Esc)', click: goHome },
@@ -157,30 +247,44 @@ function openSite(url) {
     return;
   }
   if (!win || win.isDestroyed()) return;
-
-  const entry = sites.get(url) || createSite(url);
-  if (current && current !== entry) current.view.setVisible(false);
-  current = entry;
-
-  win.contentView.addChildView(entry.view);
-  entry.view.setVisible(true);
-  layout();
-  entry.view.webContents.focus();
-  startHud();
+  transition(() => {
+    if (!win || win.isDestroyed()) return;
+    const entry = sites.get(url) || createSite(url);
+    if (current && current !== entry) current.view.setVisible(false);
+    current = entry;
+    lastLeft = null;
+    win.contentView.addChildView(entry.view);
+    entry.view.setVisible(true);
+    layout();
+    entry.view.webContents.focus();
+    startHud();
+  });
 }
 
 function goHome() {
-  stopHud();
-  if (current) { current.view.setVisible(false); current = null; }
-  if (win && !win.isDestroyed()) win.webContents.focus();
+  if (!current) return;
+  transition(() => {
+    stopHud();
+    if (current) { lastLeft = current; current.view.setVisible(false); current = null; }
+    if (win && !win.isDestroyed()) win.webContents.focus();
+  });
 }
+// Back: previous page; on the first page of a website it returns to the JustStudy screen.
 function navBack() {
   const wc = current && current.view.webContents;
-  if (wc && wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
+  if (!wc) return;
+  if (wc.navigationHistory.canGoBack()) wc.navigationHistory.goBack();
+  else goHome();
 }
+// Forward: next page; on the JustStudy screen it undoes the last "back to JustStudy" (the website
+// is kept alive, so you land exactly where you left it).
 function navForward() {
-  const wc = current && current.view.webContents;
-  if (wc && wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
+  if (!current) {
+    if (lastLeft && sites.has(lastLeft.url)) openSite(lastLeft.url);
+    return;
+  }
+  const wc = current.view.webContents;
+  if (wc.navigationHistory.canGoForward()) wc.navigationHistory.goForward();
 }
 
 // ---- Google Tasks (official API) ----
@@ -241,15 +345,14 @@ function createWindow() {
     win.on(ev, () => { layout(); setTimeout(layout, 120); })
   );
   win.on('app-command', (e, cmd) => {
-    if (!current) return;
-    if (cmd === 'browser-backward') navBack();
-    if (cmd === 'browser-forward') navForward();
+    if (cmd === 'browser-backward') navBack();   // does nothing on the JustStudy screen
+    if (cmd === 'browser-forward') navForward(); // on the JustStudy screen: back to the website you just left
   });
 
   win.on('closed', () => {
     for (const { view } of sites.values()) { try { view.webContents.close(); } catch (e) {} }
-    stopHud(); clearEsc();
-    sites.clear(); current = null; win = null;
+    stopHud(); clearEsc(); curtain = null; curtainReady = null; moving = false; queued = null;
+    sites.clear(); current = null; lastLeft = null; win = null;
   });
 }
 

@@ -3,7 +3,7 @@
    sub-tasks, stars, drag to reorder, move between lists, list menu (sort, rename, delete, clear completed).
 
    Google's public Tasks API only stores title, details, date, status, parent and order. So that you still
-   get the rest, the TIME, REPEAT and STAR of a task are kept in this app (localStorage) and are not synced
+   get the rest, the TIME, REPEAT, STAR and DEADLINE of a task are kept in this app (localStorage) and are not synced
    to your phone / Gmail. Repeating tasks create their next copy when you tick one off. */
 (function () {
   'use strict';
@@ -20,7 +20,7 @@
   var sortMode = 'date';          // 'date' | 'order'
   var ed = null;                  // the open inline editor
   var menuEl = null, menuAnchor = null, modalEl = null, dragId = null;
-  var meta = {};                  // taskId -> { s:1 star, tm:'HH:MM', rp:'daily|weekly|monthly|yearly' }
+  var meta = {};                  // taskId -> { s:1 star, dl:'YYYY-MM-DD' deadline, tm:'HH:MM', rp:'daily|weekly|monthly|yearly' }
   try { listId = localStorage.getItem('gtasks.list'); } catch (e) {}
   try { sortMode = localStorage.getItem('gtasks.sort') === 'order' ? 'order' : 'date'; } catch (e) {}
   try { meta = JSON.parse(localStorage.getItem('gtasks.meta') || '{}') || {}; } catch (e) { meta = {}; }
@@ -67,7 +67,13 @@
   }
   function saveMeta() { try { localStorage.setItem('gtasks.meta', JSON.stringify(meta)); } catch (e) {} }
   function getMeta(id) { return meta[id] || {}; }
-  function setMeta(id, m) { if (m && (m.s || m.tm || m.rp)) meta[id] = m; else delete meta[id]; saveMeta(); }
+  function setMeta(id, m) { if (m && (m.s || m.tm || m.rp || m.dl)) meta[id] = m; else delete meta[id]; saveMeta(); }
+  // change only some meta fields (star / deadline / time / repeat) and keep the rest
+  function withMeta(id, patch) {
+    var m = getMeta(id), n = { s: m.s, dl: m.dl, tm: m.tm, rp: m.rp };
+    Object.keys(patch).forEach(function (k) { n[k] = patch[k]; });
+    setMeta(id, n);
+  }
 
   /* ---------- dates (all local-calendar, as "YYYY-MM-DD") ---------- */
   function pad(n) { return String(n).padStart(2, '0'); }
@@ -84,6 +90,19 @@
     var d = parseDay(s), opt = { weekday: 'short', day: 'numeric', month: 'short' };
     if (d.getFullYear() !== new Date().getFullYear()) opt.year = 'numeric';
     return d.toLocaleDateString(undefined, long ? opt : { day: 'numeric', month: 'short' });
+  }
+  // A deadline is separate from the task's date & time: it only shows as a "Due ..." chip under the task.
+  function deadlineText(s) {
+    var td = todayStr();
+    if (s === td) return 'Due today';
+    if (s === plusDays(td, 1)) return 'Due tomorrow';
+    if (s === plusDays(td, -1)) return 'Due yesterday';
+    // later / earlier dates read like Google Tasks: "Due Sat 21 Nov" (year added only when it is not this year)
+    var d = parseDay(s);
+    var txt = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()] + ' ' + d.getDate() + ' ' +
+      ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()];
+    if (d.getFullYear() !== new Date().getFullYear()) txt += ' ' + d.getFullYear();
+    return 'Due ' + txt;
   }
   function addMonths(s, n) {
     var d = parseDay(s), day = d.getDate();
@@ -214,7 +233,8 @@
   }
 
   /* ---------- date / time / repeat picker ---------- */
-  function openPicker(init, cb) {
+  function openPicker(init, cb, opts) {
+    opts = opts || {};
     var st = { due: init.due || null, time: init.time || '', repeat: init.repeat || '' };
     var base = st.due ? parseDay(st.due) : new Date();
     var vy = base.getFullYear(), vm = base.getMonth();
@@ -257,6 +277,7 @@
     timeIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); slots.hidden = true; } });
 
     function done() {
+      if (opts.dateOnly) { closeModal(); cb({ due: st.due }); return; }
       var tv = timeIn.value.trim(), mt = /^(\d{1,2}):?(\d{2})$/.exec(tv);
       if (tv && (!mt || +mt[1] > 23 || +mt[2] > 59)) { err.textContent = 'Enter a time like 09:30'; timeIn.focus(); return; }
       st.time = tv ? pad(+mt[1]) + ':' + mt[2] : '';
@@ -264,16 +285,17 @@
       if ((st.time || st.repeat) && !st.due) st.due = tstr;
       closeModal(); cb(st);
     }
-    var card = h('div', { class: 'gt-card gt-picker', role: 'dialog', 'aria-label': 'Date and time' }, [
+    var card = h('div', { class: 'gt-card gt-picker', role: 'dialog', 'aria-label': opts.title || 'Date and time' }, [
+      opts.title ? h('h3', { text: opts.title }) : null,
       h('div', { class: 'gt-pickhead' }, [month,
         h('button', { type: 'button', class: 'gt-icon', 'aria-label': 'Previous month', onclick: function () { nav(-1); } }, [icon('left')]),
         h('button', { type: 'button', class: 'gt-icon', 'aria-label': 'Next month', onclick: function () { nav(1); } }, [icon('right')])]),
       grid,
-      h('div', { class: 'gt-prow' }, [icon('clock'), h('div', { class: 'gt-timewrap' }, [timeIn, slots])]),
-      h('div', { class: 'gt-prow' }, [icon('repeat'), rep]),
+      opts.dateOnly ? null : h('div', { class: 'gt-prow' }, [icon('clock'), h('div', { class: 'gt-timewrap' }, [timeIn, slots])]),
+      opts.dateOnly ? null : h('div', { class: 'gt-prow' }, [icon('repeat'), rep]),
       err,
       h('div', { class: 'gt-actions' }, [
-        st.due || st.time || st.repeat ? h('button', { type: 'button', class: 'gt-pill ghost', text: 'Clear', onclick: function () { closeModal(); cb({ due: null, time: '', repeat: '' }); } }) : null,
+        st.due || st.time || st.repeat ? h('button', { type: 'button', class: 'gt-pill ghost', text: 'Clear', onclick: function () { closeModal(); cb(opts.dateOnly ? { due: null } : { due: null, time: '', repeat: '' }); } }) : null,
         h('button', { type: 'button', class: 'gt-pill', text: 'Cancel', onclick: closeModal }),
         h('button', { type: 'button', class: 'gt-pill primary', text: 'Done', onclick: done })
       ])
@@ -341,6 +363,7 @@
     o = o || {};
     var done = t.status === 'completed', m = getMeta(t.id);
     var chip = chipText(t, o.grouped), over = !done && dueDay(t) && dueDay(t) < todayStr();
+    var dlCls = !m.dl || done ? '' : m.dl < todayStr() ? ' over' : m.dl === todayStr() ? ' today' : '';
     var star = h('button', { type: 'button', class: 'gt-icon gt-star' + (m.s ? ' on' : ''), title: m.s ? 'Remove from starred' : 'Add to starred',
       'aria-label': m.s ? 'Remove from starred' : 'Add to starred', 'aria-pressed': String(!!m.s), onclick: function (e) { e.stopPropagation(); toggleStar(t); } }, [icon('star', 17, m.s)]);
     var more = h('button', { type: 'button', class: 'gt-icon gt-more', title: 'Task options', 'aria-label': 'Task options', 'aria-haspopup': 'menu',
@@ -348,7 +371,8 @@
     var main = h('div', { class: 'gt-rmain' }, [
       h('div', { class: 't' + (t.title ? '' : ' empty'), text: t.title || 'Untitled' }),
       t.notes ? h('div', { class: 'gt-notes', text: t.notes.split('\n')[0] }) : null,
-      chip || m.rp || isStarredView() ? h('div', { class: 'gt-chips' }, [
+      chip || m.rp || m.dl || isStarredView() ? h('div', { class: 'gt-chips' }, [
+        m.dl ? h('span', { class: 'gt-chip dl' + dlCls, title: 'Deadline' }, [icon('target', 15), h('span', { text: deadlineText(m.dl) })]) : null,
         chip ? h('span', { class: 'gt-chip' + (over ? ' over' : '') }, [icon('clock', 13), h('span', { text: chip })]) : null,
         m.rp ? h('span', { class: 'gt-chip' }, [icon('repeat', 13), h('span', { text: m.rp })]) : null,
         isStarredView() ? h('span', { class: 'gt-chip list', text: listTitle(t.listId) }) : null
@@ -469,12 +493,12 @@
   function openEditor(which) {
     if (ed) closeEditor(true);
     closeMenu();
-    if (which === 'new') ed = { mode: 'new', draft: { title: '', notes: '', due: null, time: '', repeat: '' } };
-    else if (typeof which === 'string' && which.indexOf('sub:') === 0) ed = { mode: 'sub', parent: which.slice(4), draft: { title: '', notes: '', due: null, time: '', repeat: '' } };
+    if (which === 'new') ed = { mode: 'new', draft: { title: '', notes: '', due: null, dl: '', time: '', repeat: '' } };
+    else if (typeof which === 'string' && which.indexOf('sub:') === 0) ed = { mode: 'sub', parent: which.slice(4), draft: { title: '', notes: '', due: null, dl: '', time: '', repeat: '' } };
     else {
       var t = find(which); if (!t) return;
       var m = getMeta(t.id);
-      ed = { mode: 'edit', id: t.id, draft: { title: t.title, notes: t.notes, due: dueDay(t), time: m.tm || '', repeat: m.rp || '' } };
+      ed = { mode: 'edit', id: t.id, draft: { title: t.title, notes: t.notes, due: dueDay(t), dl: m.dl || '', time: m.tm || '', repeat: m.rp || '' } };
     }
     fullRender();
     if (ed && ed.titleIn) ed.titleIn.focus();
@@ -528,6 +552,8 @@
       fillChips();
     }
     function openPick() { openPicker(stateOf(d), apply); }
+    function setDl(day) { d.dl = day || ''; if (e.mode === 'edit') withMeta(e.id, { dl: day || undefined }); fillChips(); }
+    function openDl() { openPicker({ due: d.dl || null }, function (s) { setDl(s.due); }, { dateOnly: true, title: 'Deadline' }); }
     function chipBtn(label, ic, onclick, onx) {
       var c = h('span', { class: 'gt-chip pick' }, [
         h('button', { type: 'button', class: 'gt-chipbtn', onclick: onclick }, [ic ? icon(ic, 13) : null, h('span', { text: label })]),
@@ -546,10 +572,14 @@
           h('button', { type: 'button', class: 'gt-qchip icon', title: 'Pick date and time', 'aria-label': 'Pick date and time', onclick: openPick }, [icon('clock', 15)])
         );
       }
+      if (d.dl) chipBox.append(chipBtn(deadlineText(d.dl), 'target', openDl, function () { setDl(null); }));
+      dlBtn.className = 'gt-icon gt-rep' + (d.dl ? ' on' : '');
+      dlBtn.title = d.dl ? 'Deadline: ' + deadlineText(d.dl).slice(4) : 'Add deadline';
       rep.className = 'gt-icon gt-rep' + (d.repeat ? ' on' : '');
       rep.title = d.repeat ? 'Repeats ' + d.repeat : 'Repeat';
     }
     var rep = h('button', { type: 'button', class: 'gt-icon gt-rep', 'aria-label': 'Repeat', onclick: openPick }, [icon('repeat', 17)]);
+    var dlBtn = h('button', { type: 'button', class: 'gt-icon gt-rep', 'aria-label': 'Deadline', onclick: openDl }, [icon('target', 17)]);
     fillChips();
 
     var star = null;
@@ -559,7 +589,7 @@
     var el = h('div', { class: 'gt-edit' + (e.mode === 'sub' || (t && t.parent) ? ' sub' : '') }, [
       h('div', { class: 'gt-erow' }, [lead, titleIn, more]),
       h('div', { class: 'gt-erow notes' }, [icon('note', 16), notesIn]),
-      h('div', { class: 'gt-erow foot' }, [chipBox, rep]),
+      h('div', { class: 'gt-erow foot' }, [chipBox, dlBtn, rep]),
       e.mode === 'edit' ? null : h('div', { class: 'gt-actions tight' }, [
         h('button', { type: 'button', class: 'gt-pill', text: 'Cancel', onclick: function () { titleIn.value = ''; notesIn.value = ''; closeEditor(true); } }),
         h('button', { type: 'button', class: 'gt-pill primary', text: e.mode === 'sub' ? 'Add subtask' : 'Add', onclick: function () { closeEditor(true); } })
@@ -573,8 +603,7 @@
   /* ---------- task actions ---------- */
   function applyState(t, s) {
     if (!t) return;
-    var m = getMeta(t.id), n = { s: m.s, tm: s.time || undefined, rp: s.repeat || undefined };
-    setMeta(t.id, n);
+    withMeta(t.id, { tm: s.time || undefined, rp: s.repeat || undefined });
     var nd = s.due || null;
     if (nd !== dueDay(t)) {
       t.due = nd ? nd + 'T00:00:00.000Z' : null;
@@ -593,7 +622,7 @@
     renderList();
     api.add(lid, { title: draft.title, notes: draft.notes, due: due }, { parent: parent || undefined }).then(function (c) {
       tmp.id = c.id; tmp.position = c.position;
-      if (draft.time || draft.repeat) setMeta(c.id, { tm: draft.time || undefined, rp: draft.repeat || undefined });
+      if (draft.time || draft.repeat || draft.dl) setMeta(c.id, { dl: draft.dl || undefined, tm: draft.time || undefined, rp: draft.repeat || undefined });
       if (!ed) renderList();
     }).catch(function (e) {
       tasks = tasks.filter(function (x) { return x !== tmp; });
@@ -612,7 +641,8 @@
       if (!repeatNow) return;
       var due = nextDue(dueDay(t), m.rp);
       return api.add(t.listId, { title: t.title, notes: t.notes, due: due }).then(function (c) {
-        setMeta(c.id, { s: m.s, tm: m.tm, rp: m.rp });
+        var dl = !m.dl ? undefined : dueDay(t) ? plusDays(m.dl, Math.round((parseDay(due) - parseDay(dueDay(t))) / 864e5)) : nextDue(m.dl, m.rp);
+        setMeta(c.id, { s: m.s, dl: dl, tm: m.tm, rp: m.rp });
         if (listId === t.listId || isStarredView()) {
           tasks.unshift({ id: c.id, listId: t.listId, title: c.title, notes: c.notes, status: 'needsAction', due: c.due, parent: null, position: c.position });
           if (!ed) renderList();
@@ -625,7 +655,7 @@
 
   function toggleStar(t) {
     var m = getMeta(t.id);
-    setMeta(t.id, { s: m.s ? undefined : 1, tm: m.tm, rp: m.rp });
+    withMeta(t.id, { s: m.s ? undefined : 1 });
     renderList();
   }
 
@@ -653,16 +683,27 @@
     }).catch(fail);
   }
 
+  function setDeadline(t, day) {
+    withMeta(t.id, { dl: day || undefined });
+    if (ed && ed.id === t.id) ed.draft.dl = day || '';
+    fullRender();
+  }
+
   function openTaskMenu(t, anchor) {
     if (!t) return;
     if (!anchor.isConnected) anchor = body.querySelector('[data-id="' + CSS.escape(t.id) + '"] .gt-more') || moreBtn;
     if (isTmp(t)) return setStatus('Saving\u2026');
+    var m0 = getMeta(t.id);
     var items = [
-      { label: dueDay(t) ? 'Change deadline' : 'Add deadline', icon: 'target', onClick: function () {
-        var m = getMeta(t.id);
-        openPicker({ due: dueDay(t), time: m.tm, repeat: m.rp }, function (s) { applyState(t, s); if (ed && ed.id === t.id) { ed.draft.due = s.due; ed.draft.time = s.time; ed.draft.repeat = s.repeat; } fullRender(); });
+      { label: m0.dl ? 'Change deadline' : 'Add deadline', icon: 'target', onClick: function () {
+        openPicker({ due: getMeta(t.id).dl || null }, function (s) { setDeadline(t, s.due); }, { dateOnly: true, title: 'Deadline' });
       } }
     ];
+    if (m0.dl) items.push({ label: 'Remove deadline', icon: 'x', onClick: function () { setDeadline(t, null); } });
+    items.push({ label: (dueDay(t) || m0.tm || m0.rp) ? 'Change date & time' : 'Add date & time', icon: 'clock', onClick: function () {
+      var m = getMeta(t.id);
+      openPicker({ due: dueDay(t), time: m.tm, repeat: m.rp }, function (s) { applyState(t, s); if (ed && ed.id === t.id) { ed.draft.due = s.due; ed.draft.time = s.time; ed.draft.repeat = s.repeat; } fullRender(); });
+    } });
     if (!t.parent && !isTmp(t)) items.push({ label: 'Add a subtask', icon: 'sub', onClick: function () { openEditor('sub:' + t.id); } });
     items.push({ label: 'Delete', icon: 'trash', danger: true, onClick: function () { removeTask(t); } }, { sep: true });
     lists.forEach(function (l) { items.push({ label: l.title, checked: l.id === t.listId, onClick: function () { moveTo(t, l.id); } }); });
