@@ -21,10 +21,12 @@
       "site-preload.js",
       "google-tasks.js",
       "google-config.json",
-      "app/**/*"
+      "app/**/*",
+      "build/icon.ico"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "mac": {
       "target": "dmg",
@@ -40,7 +42,10 @@
     "nsis": {
       "oneClick": true,
       "perMachine": false,
-      "artifactName": "JustStudy-Setup.exe"
+      "artifactName": "JustStudy-Setup.exe",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     },
     "extraResources": [
       {
