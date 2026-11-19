@@ -1,4 +1,4 @@
-name: Build Windows portable exe
+name: Build Windows installer
 on:
   workflow_dispatch:
 permissions:
@@ -18,6 +18,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
       - name: Write Google Tasks config from repo secrets
         shell: bash
+        run: node -e "require('fs').writeFileSync('google-config.json', JSON.stringify({clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET}))"
         run: |
           node -e "const fs=require('fs');fs.writeFileSync('google-config.json',JSON.stringify({clientId:process.env.GOOGLE_CLIENT_ID,clientSecret:process.env.GOOGLE_CLIENT_SECRET}))"
         env:
@@ -29,5 +30,5 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
       - uses: actions/upload-artifact@v4
         with:
-          name: JustStudy-Windows-Portable
-          path: dist/JustStudy.exe
+          name: JustStudy-Windows-Installer
+          path: dist/*.exe
