@@ -2,6 +2,13 @@ const { app, BrowserWindow, WebContentsView, shell, Menu, ipcMain, session } = r
 const path = require('path');
 const gt = require('./google-tasks');
 
+// ---- memory savers ----
+// One renderer process per site-isolation frame is a big cost; sites and ads often embed many cross-origin frames.
+app.commandLine.appendSwitch('disable-features', 'Translate,MediaRouter,OptimizationHints,AutofillServerCommunication,IsolateOrigins,site-per-process');
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-domain-reliability');
+app.commandLine.appendSwitch('disable-breakpad');
+
 // Only one instance at a time
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -10,6 +17,8 @@ let current = null;      // the website currently on screen
 let lastLeft = null;     // the website you just left for JustStudy (Forward on the JustStudy screen returns to it)
 const sites = new Map(); // url -> { view, url } (kept alive so you return to where you were)
 
+const MAX_SITES = 2;                    // websites kept in memory at once (the one on screen + the most recent other)
+const SITE_IDLE_MS = 10 * 60 * 1000;    // a website left alone on the JustStudy screen this long is closed to free memory
 const SITE_PARTITION = 'persist:sites'; // keeps your logins (Google, ALLEN...) between launches
 const ESC_HOLD_MS = 600;                // hold Esc this long on a website to go back to JustStudy
 
@@ -299,6 +308,23 @@ function transition(swap) {
   swap();
 }
 
+function destroySite(entry) {
+  try { if (win && !win.isDestroyed()) win.contentView.removeChildView(entry.view); } catch (e) {}
+  try { entry.view.webContents.close(); } catch (e) {}
+  sites.delete(entry.url);
+  if (lastLeft === entry) lastLeft = null;
+}
+const audible = (e) => { try { return e.view.webContents.isCurrentlyAudible(); } catch (x) { return false; } };
+// Keep at most MAX_SITES websites alive (least recently used go first; a site that is playing sound is never closed)
+function trimSites() {
+  const others = [...sites.values()].filter((e) => e !== current && !audible(e)).sort((a, b) => b.used - a.used);
+  others.slice(Math.max(0, MAX_SITES - (current ? 1 : 0))).forEach(destroySite);
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const e of [...sites.values()]) if (e !== current && now - e.used > SITE_IDLE_MS && !audible(e)) destroySite(e);
+}, 60 * 1000);
+
 function createSite(url) {
   const view = new WebContentsView({
     webPreferences: {
@@ -306,7 +332,8 @@ function createSite(url) {
       preload: path.join(__dirname, 'site-preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      spellcheck: false
     }
   });
   const wc = view.webContents;
@@ -343,8 +370,8 @@ function createSite(url) {
     if (current && current.view === view) pushHud();
   });
 
-  wc.loadURL(url);
-  const entry = { view, url };
+  ensureExtensions().then(() => { if (!wc.isDestroyed()) wc.loadURL(url); }); // extensions start with the first website, not at launch
+  const entry = { view, url, used: Date.now() };
   sites.set(url, entry);
   return entry;
 }
@@ -360,6 +387,7 @@ function openSite(url) {
     const entry = sites.get(url) || createSite(url);
     if (current && current !== entry) current.view.setVisible(false);
     current = entry;
+    entry.used = Date.now();
     lastLeft = null;
     win.contentView.addChildView(entry.view);
     entry.view.setVisible(true);
@@ -367,6 +395,7 @@ function openSite(url) {
     entry.view.webContents.focus();
     startHud();
     showNav();
+    trimSites();
   });
 }
 
@@ -375,7 +404,8 @@ function goHome() {
   transition(() => {
     stopHud();
     hideNav();
-    if (current) { lastLeft = current; current.view.setVisible(false); current = null; }
+    if (current) { lastLeft = current; current.used = Date.now(); current.view.setVisible(false); current = null; }
+    trimSites();
     if (win && !win.isDestroyed()) win.webContents.focus();
   });
 }
@@ -431,6 +461,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: false,
       backgroundThrottling: false // keep the study timer accurate when minimized
     }
   });
@@ -468,19 +499,21 @@ function createWindow() {
 }
 
 /* ---------- Chrome extensions (unpacked folders in ./extensions, e.g. extensions/ublock) for the websites ---------- */
+let extP = null;
+function ensureExtensions() { return extP || (extP = loadExtensions()); }
 function loadExtensions() {
   const fs = require('fs');
   const dir = app.isPackaged ? path.join(process.resourcesPath, 'extensions') : path.join(__dirname, 'extensions');
   let names = [];
-  try { names = fs.readdirSync(dir); } catch (e) { return; }
+  try { names = fs.readdirSync(dir); } catch (e) { return Promise.resolve(); }
   const ses = session.fromPartition(SITE_PARTITION);
-  for (const n of names) {
+  return Promise.all(names.map((n) => {
     const full = path.join(dir, n);
-    if (!fs.existsSync(path.join(full, 'manifest.json'))) continue;
-    ses.loadExtension(full, { allowFileAccess: true })
+    if (!fs.existsSync(path.join(full, 'manifest.json'))) return null;
+    return ses.loadExtension(full, { allowFileAccess: true })
       .then((x) => console.log('Extension loaded:', x.name))
       .catch((e) => console.warn('Extension failed:', n, e && e.message));
-  }
+  }));
 }
 
 app.whenReady().then(() => {
@@ -492,7 +525,6 @@ app.whenReady().then(() => {
     secureDnsServers: ['https://dns.adguard.com/dns-query']
   });
 
-  loadExtensions();
   Menu.setApplicationMenu(null);
   createWindow();
   app.on('activate', () => {
