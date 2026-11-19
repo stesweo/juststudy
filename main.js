@@ -454,6 +454,7 @@ function createWindow() {
     minHeight: 600,
     fullscreen: true, // opens full-screen (F11 toggles it)
     title: 'JustStudy',
+    icon: path.join(__dirname, 'build', 'icon.ico'),
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
     webPreferences: {
