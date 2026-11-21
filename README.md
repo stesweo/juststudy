@@ -22,6 +22,9 @@ Output goes to `dist/`.
   full screen, with no toolbar. **Hold Esc (~0.6 s) to go back to JustStudy** (a quick tap of Esc still goes
   to the website). Alt+Left/Right (or the mouse back/forward buttons) = back/forward: **Back on a website's first page returns to JustStudy, and Forward on the JustStudy screen goes back to the website you just left**, Ctrl+R / F5 = reload, Ctrl+W = back to JustStudy; the
   right-click menu on a site also has Back / Forward / Reload / Back to JustStudy.
+- Only the sites that have a button (ALLEN, NEET PYQs, Google Tasks) open inside the app. Every other link, such as the
+  aqi.in card or a link inside ALLEN that leaves ALLEN, opens in your default browser. Google sign-in pages are still
+  allowed inside those sites so logins keep working. To add a site, give it a button and add its host to `APP_HOSTS` in `main.js`.
 - While a website is open, the clock, subject/state and stopwatch (same readout and fonts as the DVD screen)
   float over it, semi-transparent and click-through. Customise button -> "Clock on websites": on/off,
   transparency and a 3x3 position picker.

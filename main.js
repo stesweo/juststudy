@@ -32,6 +32,24 @@ const HIDE_VSCROLL_CSS =
 const chromeUA = (ua) =>
   ua.replace(/\sElectron\/\S+/i, '').replace(/\sjuststudy\/\S+/i, '');
 
+/* ---------- which websites may open inside the app ---------- */
+// Only the sites that have a button in the top right (ALLEN, NEET PYQs, Google Tasks) open inside JustStudy.
+// Every other link (aqi.in, a link inside ALLEN that leaves ALLEN, ...) opens in your default browser instead.
+// Adding a new button for a site? Add its host here too. Subdomains are included (allen.in covers www.allen.in).
+const APP_HOSTS = ['allen.in', 'examside.com', 'tasks.google.com'];
+// Sign-in pages may load inside those sites (so "Sign in with Google" keeps working), but never open on their own.
+const SIGNIN_HOSTS = ['accounts.google.com'];
+
+const hostOf = (u) => { try { return new URL(u).hostname.toLowerCase(); } catch (e) { return ''; } };
+const hostIn = (h, list) => list.some((d) => h === d || h.endsWith('.' + d));
+const isWeb = (u) => /^https?:/i.test(u);
+const isAppSite = (u) => isWeb(u) && hostIn(hostOf(u), APP_HOSTS);                          // may open from the JustStudy screen
+const allowedInSite = (u) => isAppSite(u) || (isWeb(u) && hostIn(hostOf(u), SIGNIN_HOSTS)); // may load inside an open site
+// Hand a link to the default browser (only web links and mail links; never file:, custom protocols, etc.)
+function openExternal(u) {
+  if (isWeb(u) || /^mailto:/i.test(u)) shell.openExternal(u).catch(() => {});
+}
+
 /* ---------- fullscreen: native window fullscreen, toggled with F11 only (Esc never leaves it) ---------- */
 function toggleFullScreen() {
   if (win && !win.isDestroyed()) win.setFullScreen(!win.isFullScreen());
@@ -340,11 +358,16 @@ function createSite(url) {
   wc.setUserAgent(chromeUA(wc.getUserAgent()));
   hookKeys(wc, true);
 
-  // Links that want a new tab just load in this same view
+  // Links that want a new tab load in this same view, but only if they stay on the site (or are a sign-in page);
+  // anything else goes to the default browser
   wc.setWindowOpenHandler(({ url: u }) => {
-    if (/^https?:/i.test(u)) wc.loadURL(u);
-    else if (/^mailto:/i.test(u)) shell.openExternal(u);
+    if (allowedInSite(u)) wc.loadURL(u);
+    else openExternal(u);
     return { action: 'deny' };
+  });
+  // Same rule for ordinary links and scripts that navigate this view to another website
+  wc.on('will-navigate', (e, u) => {
+    if (isWeb(u) && !allowedInSite(u)) { e.preventDefault(); openExternal(u); }
   });
 
   // The toolbar is gone, so back / forward / reload / home live in the right-click menu (and the shortcuts)
@@ -377,10 +400,8 @@ function createSite(url) {
 }
 
 function openSite(url) {
-  if (!/^https?:/i.test(url)) {
-    if (/^mailto:/i.test(url)) shell.openExternal(url);
-    return;
-  }
+  // Only the sites with a button open inside the app; everything else (aqi.in, ...) opens in the default browser
+  if (!isAppSite(url)) { openExternal(url); return; }
   if (!win || win.isDestroyed()) return;
   transition(() => {
     if (!win || win.isDestroyed()) return;
@@ -472,7 +493,8 @@ function createWindow() {
   win.on('page-title-updated', (e) => e.preventDefault());
   win.loadFile(path.join(__dirname, 'app', 'index.html'));
 
-  // ALLEN, NEET PYQ... open inside this same window (and stay fullscreen if it is)
+  // ALLEN, NEET PYQ, Google Tasks open inside this same window (and stay fullscreen if it is);
+  // openSite() sends every other link (e.g. the aqi.in card) to the default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     openSite(url);
     return { action: 'deny' };
