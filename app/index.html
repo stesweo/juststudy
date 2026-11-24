@@ -225,9 +225,7 @@ button.cell:hover{border-color:var(--muted)}
 .n{font-family:var(--display);font-weight:500;font-size:.85rem;line-height:1.2;align-self:flex-start}
 .cell.today .n{background:var(--fg);color:var(--bg);border-radius:999px;padding:0 7px;font-weight:600}
 .t{font-family:var(--mono);font-size:.72rem;color:var(--fg);font-variant-numeric:tabular-nums;line-height:1}
-.bar{display:block;height:5px;border-radius:3px;background:var(--line);overflow:hidden}
-.fill{display:flex;height:100%;border-radius:3px;overflow:hidden}
-.fill b{display:block;flex:1 1 0;min-width:0}
+.bar{display:block;flex:0 0 5px;width:100%;height:5px;min-height:5px;border-radius:3px;background:var(--line);forced-color-adjust:none;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 @media (max-width:480px){
   .dow,.days{gap:3px}
   .cell{min-height:60px;padding:5px 4px 6px;gap:3px;border-radius:8px}
@@ -1275,7 +1273,36 @@ function streak(){
   return n;
 }
 
+/* Day bar colours: resolved to real colours up front (with fixed fallbacks) so the bar always paints */
+var BAR_FALLBACK={physics:'#7ea6ff',chemistry:'#f5a65b',botany:'#6fd3a0',zoology:'#f27fa5'};
+function resolveColor(css,fallback){
+  var c='';
+  try{
+    var p=document.createElement('span');
+    p.style.cssText='position:absolute;width:0;height:0;visibility:hidden;background-color:'+css;
+    document.body.appendChild(p);
+    c=getComputedStyle(p).backgroundColor;
+    document.body.removeChild(p);
+  }catch(e){}
+  return(!c||c==='transparent'||c==='rgba(0, 0, 0, 0)')?fallback:c;
+}
+function barColors(){
+  var C={track:resolveColor('var(--line)','rgba(255,255,255,.16)')};
+  SUBJ.forEach(function(s){C[s.id]=resolveColor('var(--'+s.id+')',BAR_FALLBACK[s.id]||'#aab2e6')});
+  return C;
+}
+/* one bar per day: fills toward an 8 hour day, split by subject (logged and added time alike) */
+function dayBar(day,t,C){
+  var fill=Math.max(8,Math.min(1,t/FULL)*100),acc=0,stops=[];
+  SUBJ.forEach(function(s){
+    var v=day[s.id];
+    if(v>0){stops.push(C[s.id]+' '+(acc/t*fill).toFixed(2)+'% '+((acc+v)/t*fill).toFixed(2)+'%');acc+=v}
+  });
+  stops.push(C.track+' '+fill.toFixed(2)+'% 100%');
+  return '<span class="bar" role="img" aria-label="'+hmLong(t)+' of 8h" style="background:linear-gradient(90deg,'+stops.join(',')+')"></span>';
+}
 function renderCalendar(){
+  var C=barColors();
   var first=new Date(view.y,view.m,1);
   var lead=(first.getDay()+6)%7;
   var dim=new Date(view.y,view.m+1,0).getDate();
@@ -1290,10 +1317,7 @@ function renderCalendar(){
     var cls='cell'+(key===todayKey?' today':'')+(key===sel?' sel':'')+(key>todayKey?' future':'');
     var inner='<span class="n">'+d+'</span>';
     if(t>0){
-      var w=Math.max(10,Math.min(1,t/FULL)*100);
-      inner+='<span class="t">'+hmShort(t)+'</span><span class="bar"><span class="fill" style="width:'+w.toFixed(1)+'%">'+
-        SUBJ.map(function(s){return day[s.id]>0?'<b class="s-'+s.id+'" style="background:var(--c);flex-grow:'+day[s.id]+'"></b>':''}).join('')+
-        '</span></span>';
+      inner+='<span class="t">'+hmShort(t)+'</span>'+dayBar(day,t,C);
     }
     var label=d+' '+first.toLocaleDateString('en-GB',{month:'long'})+(t>0?', '+hmLong(t)+' studied':', nothing logged');
     html+='<button type="button" class="'+cls+'" data-key="'+key+'" aria-label="'+label+'" aria-pressed="'+(key===sel)+'">'+inner+'</button>';
@@ -1354,6 +1378,7 @@ function renderAll(){
   renderDay();
   renderCards();
 }
+window.__renderCalendar=renderCalendar;
 
 /* ---------- events ---------- */
 var ICON={
@@ -2221,6 +2246,16 @@ function applyCust(){
   b.setAttribute('data-theme',cust.theme);
 }
 applyCust();
+/* redraw the calendar's day bars when the look changes (AMOLED, space mode, theme); colours ease for ~1s, so redraw again once settled */
+(function(){
+  function sig(){var b=document.body;return[b.classList.contains('amoled'),b.classList.contains('space-on'),b.getAttribute('data-theme')].join('|')}
+  function redraw(){try{if(window.__renderCalendar)window.__renderCalendar()}catch(e){}}
+  var last=sig(),t=0;
+  new MutationObserver(function(){
+    var s=sig();if(s===last)return;last=s;
+    redraw();clearTimeout(t);t=setTimeout(redraw,1000);
+  }).observe(document.body,{attributes:true,attributeFilter:['class','data-theme']});
+})();
 /* dim after the chosen idle time while fully scrolled up */
 function dimHole(){
   var r=$('#clock').getBoundingClientRect(),st=document.body.style,pad=10;
